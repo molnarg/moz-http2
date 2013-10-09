@@ -419,9 +419,12 @@ Http2Stream::ParseHttpRequestHeaders(const char *buf,
     bool lastFrame = (idx == numFrames - 1);
 
     flags = 0;
-    if (!idx)
-      flags |= Http2Session::kFlag_PRIORITY;
     frameLen = maxFrameData;
+    if (!idx) {
+      flags |= Http2Session::kFlag_PRIORITY;
+      // Only the first frame needs the 4-byte offset
+      maxFrameData = Http2Session::kMaxFrameData;
+    }
     if (lastFrame) {
       frameLen = dataLength;
       flags |= lastFrameFlags;
@@ -444,7 +447,7 @@ Http2Stream::ParseHttpRequestHeaders(const char *buf,
     memcpy(mTxInlineFrame.get() + outputOffset,
            compressedData.BeginReading() + compressedDataOffset, frameLen);
     compressedDataOffset += frameLen;
-    outputOffset += Http2Session::kMaxFrameData;
+    outputOffset += frameLen;
   }
 
   Telemetry::Accumulate(Telemetry::SPDY_SYN_SIZE, compressedData.Length());
