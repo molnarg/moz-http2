@@ -584,7 +584,7 @@ Http2Session::CreateFrameHeader(charType dest, uint16_t frameLength,
                                 uint32_t streamID)
 {
   MOZ_ASSERT(frameLength <= kMaxFrameData, "framelength too large");
-  MOZ_ASSERT(!(streamID & 80000000));
+  MOZ_ASSERT(!(streamID & 0x80000000));
 
   frameLength = PR_htons(frameLength);
   streamID = PR_htonl(streamID);
