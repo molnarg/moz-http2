@@ -455,6 +455,43 @@ Http2Stream::ParseHttpRequestHeaders(const char *buf,
     (11 + mTransaction->RequestHead()->RequestURI().Length() +
      mFlatHttpRequestHeaders.Length());
   
+  // TODO - is this the right place for this?
+  const char *beginBuffer = mFlatHttpRequestHeaders.BeginReading();
+  int32_t crlfIndex = mFlatHttpRequestHeaders.Find("\r\n");
+  while (true) {
+    int32_t startIndex = crlfIndex + 2;
+
+    crlfIndex = mFlatHttpRequestHeaders.Find("\r\n", false, startIndex);
+    if (crlfIndex == -1)
+      break;
+
+    int32_t colonIndex = mFlatHttpRequestHeaders.Find(":", false, startIndex,
+                                                      crlfIndex - startIndex);
+    if (colonIndex == -1)
+      break;
+
+    nsDependentCSubstring name = Substring(beginBuffer + startIndex,
+                                           beginBuffer + colonIndex);
+    // all header names are lower case in spdy
+    ToLowerCase(name);
+
+    if (name.Equals("content-length")) {
+      nsCString *val = new nsCString();
+      int32_t valueIndex = colonIndex + 1;
+      while (valueIndex < crlfIndex && beginBuffer[valueIndex] == ' ')
+        ++valueIndex;
+
+      nsDependentCSubstring v = Substring(beginBuffer + valueIndex,
+                                          beginBuffer + crlfIndex);
+      val->Append(v);
+
+      int64_t len;
+      if (nsHttp::ParseInt64(val->get(), nullptr, &len))
+        mRequestBodyLenRemaining = len;
+      break;
+    }
+  }
+
   mFlatHttpRequestHeaders.Truncate();
   Telemetry::Accumulate(Telemetry::SPDY_SYN_RATIO, ratio);
   return NS_OK;
