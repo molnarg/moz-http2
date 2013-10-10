@@ -8,8 +8,6 @@ remove NOTES file from HG
 
 c style casts
 static_assert
-hpack superclass
-hpack deque
 
 ----
 

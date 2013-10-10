@@ -10,10 +10,45 @@
 // tools.ietf.org/html/draft-ietf-httpbis-header-compression-02 
 
 #include "mozilla/Attributes.h"
+#include "nsDeque.h"
 #include "nsString.h"
 
 namespace mozilla {
 namespace net {
+
+class nvPair
+{
+public:
+nvPair(const nsACString &name, const nsACString &value)
+  : mName(name)
+  , mValue(value)
+  { }
+
+  uint32_t Size() const { return mName.Length() + mValue.Length() + 32; }
+
+  nsCString mName;
+  nsCString mValue;
+};
+
+class nvFIFO
+{
+public:
+  nvFIFO();
+  ~nvFIFO();
+  void AddElement(const nsCString &name, const nsCString &value);
+  void AddElement(const nsCString &name);
+  void RemoveElement();
+  void AddElement0(const nsCString &name, const nsCString &value);
+  void ChangeElement(int index, const nsCString &name, const nsCString &value);
+  uint32_t ByteCount() const;
+  uint32_t Length() const;
+  void Clear();
+  const nvPair *operator[] (int32_t index) const;
+  
+private:
+  uint32_t mByteCount;
+  nsDeque  mTable;
+};
 
 class Http2BaseCompressor
 {
@@ -22,32 +57,12 @@ public:
   virtual ~Http2BaseCompressor() { };
   
 protected:
-  class nvPair
-  {
-  public:
-    nvPair(const nsACString &name, const nsACString &value)
-      : mName(name)
-      , mValue(value)
-    { }
-    
-    uint32_t Size() const { return mName.Length() + mValue.Length() + 32; }
-
-    nsCString mName;
-    nsCString mValue;
-  };
-
   // this will become a HTTP/2 SETTINGS value in a future draft
   const static uint32_t kMaxBuffer = 4096;
 
-  void AddHeaderTableElement(const nsACString &, const nsACString &);
-  void AddHeaderTableElement(const nsACString &);
-  void ClearHeaderTable();
+  virtual void ClearHeaderTable();
   virtual void UpdateReferenceSet(int32_t delta);
  
-  // The header table is the dictionary of references
-  nsAutoTArray<nvPair, 64> mHeaderTable;
-  uint32_t mHeaderTableSize;
-
   nsAutoTArray<uint32_t, 64> mReferenceSet; // list of indicies
 
   // the alternate set is used to track the emitted headers when
@@ -66,6 +81,7 @@ protected:
   nsAutoTArray<uint32_t, 64> mAlternateReferenceSet; // list of indicies
 
   nsACString *mOutput;
+  nvFIFO mHeaderTable;
 };
 
 class Http2Decompressor MOZ_FINAL : public Http2BaseCompressor
@@ -94,7 +110,7 @@ private:
 
   nsresult DecodeInteger(uint32_t prefixLen, uint32_t &result);
   nsresult OutputHeader(uint32_t index);
-  nsresult OutputHeader(nsACString &name, nsACString &value);
+  nsresult OutputHeader(const nsACString &name, const nsACString &value);
 
   nsresult CopyHeaderString(uint32_t index, nsACString &name);
   nsresult CopyStringFromInput(uint32_t index, nsACString &val);
@@ -128,10 +144,10 @@ public:
   int64_t GetParsedContentLength() { return mParsedContentLength; } // -1 on not found
 
 protected:
-  virtual void UpdateReferenceSet(int32_t delta)  MOZ_OVERRIDE;
+  virtual void ClearHeaderTable() MOZ_OVERRIDE;
+  virtual void UpdateReferenceSet(int32_t delta) MOZ_OVERRIDE;
 
 private:
-
   enum outputCode {
     kPlainLiteral,
     kIndexedLiteral,
@@ -141,7 +157,7 @@ private:
   };
 
   void DoOutput(Http2Compressor::outputCode code,
-                const class nvPair &pair, uint32_t index);
+                const class nvPair *pair, uint32_t index);
   void EncodeInteger(uint32_t prefixLen, uint32_t val);
   void ProcessHeader(const nvPair inputPair);
   void MakeRoom(uint32_t amount);
