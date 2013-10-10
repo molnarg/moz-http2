@@ -97,6 +97,7 @@ nsNSSSocketInfo::nsNSSSocketInfo(SharedSSLState& aState, uint32_t providerFlags)
     mKEAExpected(nsISSLSocketControl::KEY_EXCHANGE_UNKNOWN),
     mSymmetricCipherUsed(nsISSLSocketControl::SYMMETRIC_CIPHER_UNKNOWN),
     mSymmetricCipherExpected(nsISSLSocketControl::SYMMETRIC_CIPHER_UNKNOWN),
+    mSSLVersionUsed(nsISSLSocketControl::SSL_VERSION_UNKNOWN),
     mProviderFlags(providerFlags),
     mSocketCreationTimestamp(TimeStamp::Now()),
     mPlaintextBytesRead(0)
@@ -153,6 +154,13 @@ NS_IMETHODIMP
 nsNSSSocketInfo::SetSymmetricCipherExpected(int16_t aSymmetricCipher)
 {
   mSymmetricCipherExpected = aSymmetricCipher;
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+nsNSSSocketInfo::GetSSLVersionUsed(int16_t *aSSLVersionUsed)
+{
+  *aSSLVersionUsed = mSSLVersionUsed;
   return NS_OK;
 }
 

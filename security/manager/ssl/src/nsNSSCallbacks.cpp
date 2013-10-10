@@ -856,6 +856,11 @@ PreliminaryHandshakeDone(PRFileDesc* fd)
   infoObject->SetPreliminaryHandshakeDone();
   infoObject->SetFirstServerHelloReceived();
 
+  SSLChannelInfo channelInfo;
+  if (SSL_GetChannelInfo(fd, &channelInfo, sizeof(channelInfo)) == SECSuccess) {
+    infoObject->SetSSLVersionUsed(channelInfo.protocolVersion);
+  }
+
   // Get the NPN value.
   SSLNextProtoState state;
   unsigned char npnbuf[256];
@@ -1126,6 +1131,7 @@ void HandshakeCallback(PRFileDesc* fd, void* client_data) {
     // 0=ssl3, 1=tls1, 2=tls1.1, 3=tls1.2
     unsigned int versionEnum = channelInfo.protocolVersion & 0xFF;
     Telemetry::Accumulate(Telemetry::SSL_HANDSHAKE_VERSION, versionEnum);
+    infoObject->SetSSLVersionUsed(channelInfo.protocolVersion);
 
     SSLCipherSuiteInfo cipherInfo;
     rv = SSL_GetCipherSuiteInfo(channelInfo.cipherSuite, &cipherInfo,

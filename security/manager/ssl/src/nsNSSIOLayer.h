@@ -118,6 +118,11 @@ public:
     return result;
   }
 
+  void SetSSLVersionUsed(int16_t version)
+  {
+    mSSLVersionUsed = version;
+  }
+
 private:
   PRFileDesc* mFd;
 
@@ -145,12 +150,13 @@ private:
   bool      mSentClientCert;
   bool      mNotedTimeUntilReady;
 
-  // mKEA* and mSymmetricCipher* are used in false start detetermination
-  // values are from nsISSLSocketControl
+  // These are used in false start detetermination
+  // values are from nsISSLSocketControl.
   int16_t mKEAUsed;
   int16_t mKEAExpected;
   int16_t mSymmetricCipherUsed;
   int16_t mSymmetricCipherExpected;
+  int16_t mSSLVersionUsed;
 
   uint32_t mProviderFlags;
   mozilla::TimeStamp mSocketCreationTimestamp;

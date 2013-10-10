@@ -274,7 +274,7 @@ nsHttpConnection::EnsureNPNComplete()
 
     LOG(("nsHttpConnection::EnsureNPNComplete %p negotiated to '%s'\n",
          this, negotiatedNPN.get()));
-
+    
     uint8_t spdyVersion;
     rv = gHttpHandler->SpdyInfo()->GetNPNVersionIndex(negotiatedNPN,
                                                       &spdyVersion);
