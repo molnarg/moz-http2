@@ -46,13 +46,21 @@
  * Standard constructor
  * @param deallocator, called by Erase and ~nsDeque
  */
-nsDeque::nsDeque(nsDequeFunctor* aDeallocator) {
+nsDeque::nsDeque(nsDequeFunctor* aDeallocator,
+                 uint32_t initialCapacity)
+{
   MOZ_COUNT_CTOR(nsDeque);
-  mDeallocator=aDeallocator;
-  mOrigin=mSize=0;
-  mData=mBuffer; // don't allocate space until you must
-  mCapacity=sizeof(mBuffer)/sizeof(mBuffer[0]);
-  memset(mData, 0, mCapacity*sizeof(mBuffer[0]));
+  mDeallocator = aDeallocator;
+  mOrigin = mSize = 0;
+  if (initialCapacity) {
+    mData = static_cast<void **>
+      (malloc (initialCapacity * sizeof(mBuffer[0])));
+    mCapacity = initialCapacity;
+  } else {
+    mData = mBuffer; // don't allocate space until you must
+    mCapacity = sizeof(mBuffer) / sizeof(mBuffer[0]);
+  }
+  memset(mData, 0, mCapacity * sizeof(mBuffer[0]));
 }
 
 /**
@@ -321,6 +329,15 @@ void* nsDeque::RemoveObjectAt(int32_t aIndex) {
   mSize--;
 
   return result;
+}
+
+void nsDeque::SetObjectAt(int32_t aIndex, void *aItem)
+{
+  if ((aIndex < 0) || (aIndex >= mSize)) {
+    return;
+  }
+
+  mData[modulus(mOrigin + aIndex, mCapacity)] = aItem;
 }
 
 /**

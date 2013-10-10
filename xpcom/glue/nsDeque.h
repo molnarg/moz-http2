@@ -62,7 +62,8 @@ class NS_COM_GLUE nsDeque {
   friend class nsDequeIterator;
   typedef mozilla::fallible_t fallible_t;
   public:
-   nsDeque(nsDequeFunctor* aDeallocator = nullptr);
+  nsDeque(nsDequeFunctor* aDeallocator = nullptr,
+          uint32_t initialCapacity = 0);
   ~nsDeque();
 
   /**
@@ -142,6 +143,14 @@ class NS_COM_GLUE nsDeque {
    * @return  the element which was removed
    */
   void* RemoveObjectAt(int aIndex);
+
+  /**
+   * Changes the value of the i'th member of the deque.
+   *
+   * @param   index of  item
+   * @param   value of item
+   */
+  void SetObjectAt(int aIndex, void* aItem);
 
   /**
    * Remove all items from container without destroying them.
