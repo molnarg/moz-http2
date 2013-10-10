@@ -377,27 +377,26 @@ Http2Stream::ParseHttpRequestHeaders(const char *buf,
 
   lastFrameFlags |= Http2Session::kFlag_END_HEADERS;
 
-  // split this one HEADERS frame up into N HEADERS frames if it exceeds the
-  // 2^14-1 limit for 1 frame. Do it by inserting 12 byte gaps in the existing
-  // frame for the new headers and priority fields to be written into. There is
+  // split this one HEADERS frame up into N HEADERS + CONTINUATION frames if it exceeds the
+  // 2^14-1 limit for 1 frame. Do it by inserting header size gaps in the existing
+  // frame for the new headers and for the first one a priority field. There is
   // no question this is ugly, but a 16KB HEADERS frame should be a long
   // tail event, so this is really just for correctness and a nop in the base case.
   //
-  // it would be possible to leave the priority field out of frame # 0 -> N-1,
-  // but it makes it harder to calculate the offsets and the vast majority of
-  // the time there is just 1 frame anyhow. Not worth it for 4 bytes of savings.
-
   
   MOZ_ASSERT(!mTxInlineFrameUsed);
 
   uint32_t dataLength = compressedData.Length();
   uint32_t maxFrameData = Http2Session::kMaxFrameData - 4; // 4 byes for priority
-  uint32_t numFrames = (dataLength + maxFrameData - 1) / maxFrameData;
+  uint32_t numFrames = 1;
 
-  // if this encodes to 0 bytes we still need to send a HEADER frame for the
-  // sake of informing the other end the reference set equals the header set
-  if (!numFrames)
-    numFrames = 1;
+  if (dataLength > maxFrameData) {
+    numFrames += ((dataLength - maxFrameData) + Http2Session::kMaxFrameData - 1) / 
+      Http2Session::kMaxFrameData;
+    MOZ_ASSERT (numFrames > 1);
+  }
+
+  // note that we could still have 1 frame for 0 bytes of data. that's ok.
 
   uint32_t messageSize = dataLength;
   messageSize += 12; // header frame overhead
@@ -409,8 +408,8 @@ Http2Stream::ParseHttpRequestHeaders(const char *buf,
                              mTxInlineFrameSize);
 
   mTxInlineFrameUsed += messageSize;
-  LOG3(("%p Generating %d bytes of HEADERS for stream 0x%X at priority %u\n",
-        this, mTxInlineFrameUsed, mStreamID, mPriority));
+  LOG3(("%p Generating %d bytes of HEADERS for stream 0x%X at priority %u frames %u\n",
+        this, mTxInlineFrameUsed, mStreamID, mPriority, numFrames));
 
   uint32_t outputOffset = 0;
   uint32_t compressedDataOffset = 0;
@@ -443,7 +442,7 @@ Http2Stream::ParseHttpRequestHeaders(const char *buf,
       memcpy (mTxInlineFrame.get() + outputOffset, &priority, 4);
       outputOffset += 4;
     }
-    
+
     memcpy(mTxInlineFrame.get() + outputOffset,
            compressedData.BeginReading() + compressedDataOffset, frameLen);
     compressedDataOffset += frameLen;
