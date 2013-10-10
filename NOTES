@@ -1,0 +1,20 @@
+reason phrases
+
+push real request header matching.. same origin and coalescing.. and cache
+
+=====
+
+remove NOTES file from HG
+
+c style casts
+static_assert
+hpack superclass
+hpack deque
+
+----
+
+GET / [404]
+Reload / [404]
+Get /simpleTest.txt
+reload /simpleTest.txt [200 or 304.. confirm ims]
+

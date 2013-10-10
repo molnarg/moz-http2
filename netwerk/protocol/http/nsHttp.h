@@ -26,7 +26,12 @@ namespace net {
     enum {
         SPDY_VERSION_2_REMOVED = 2,
         SPDY_VERSION_3 = 3,
-        SPDY_VERSION_31 = 4
+        SPDY_VERSION_31 = 4,
+
+        // leave room for official versions. telem goes to 48
+        // 24 was a internal spdy/3.1
+        // 25 was spdy/4a2
+        HTTP2_VERSION_DRAFT06 = 26
     };
 } // namespace mozilla::net
 } // namespace mozilla
