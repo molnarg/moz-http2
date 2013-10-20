@@ -320,7 +320,6 @@ var tests = [ test_spdy_post_big
             , test_spdy_big
             , test_spdy_post
             ];
-var tests = [ test_spdy_basic ];
 var current_test = 0;
 
 function run_next_test() {

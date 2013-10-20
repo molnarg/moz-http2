@@ -16,99 +16,135 @@ function getHttpContent(path) {
   return content;
 }
 
-function getHugeContent(size) {
+function generateContent(size) {
   var content = '';
-
   for (var i = 0; i < size; i++) {
     content += '0';
   }
-
   return content;
 }
 
-var post_hash = null;
-function receivePostData(chunk) {
-  post_hash.update(chunk.toString());
-}
+/* This takes care of responding to the multiplexed request for us */
+var m = {
+  mp1res: null,
+  mp2res: null,
+  buf: null,
+  mp1start: 0,
+  mp2start: 0,
 
-function finishPost(res, content) {
-  var md5 = post_hash.digest('hex');
-  res.setHeader('X-Calculated-MD5', md5);
-  res.writeHead(200);
-  res.end(content);
-}
+  checkReady: function() {
+    if (this.mp1res != null && this.mp2res != null) {
+      this.buf = generateContent(30*1024);
+      this.mp1start = 0;
+      this.mp2start = 0;
+      this.send(this.mp1res, 0);
+      setTimeout(this.send.bind(this, this.mp2res, 0), 5);
+    }
+  },
+
+  send: function(res, start) {
+    var end = Math.min(start + 1024, this.buf.length);
+    var content = this.buf.substring(start, end);
+    res.write(content);
+    if (end < this.buf.length) {
+      setTimeout(this.send.bind(this, res, end), 10);
+    } else {
+      res.end();
+    }
+  }
+};
 
 function handleRequest(req, res) {
   var u = url.parse(req.url);
   var content = getHttpContent(u.pathname);
+  var push;
 
-  if (req.stream) {
+  if (req.httpVersionMajor === 2) {
     res.setHeader('X-Connection-Http2', 'yes');
     res.setHeader('X-Spdy-StreamId', '' + req.stream.id);
   } else {
     res.setHeader('X-Connection-Http2', 'no');
   }
 
-  if (u.pathname == '/exit') {
+  if (u.pathname === '/exit') {
     res.setHeader('Content-Type', 'text/plain');
     res.writeHead(200);
     res.end('ok');
     process.exit();
-  } else if (u.pathname == '/multiplex1' && req.streamID) {
+  }
+
+  else if ((u.pathname === '/multiplex1') && (req.httpVersionMajor === 2)) {
     res.setHeader('Content-Type', 'text/plain');
     res.writeHead(200);
     m.mp1res = res;
     m.checkReady();
     return;
-  } else if (u.pathname == '/multiplex2' && req.streamID) {
+  }
+
+  else if ((u.pathname === '/multiplex2') && (req.httpVersionMajor === 2)) {
     res.setHeader('Content-Type', 'text/plain');
     res.writeHead(200);
     m.mp2res = res;
     m.checkReady();
     return;
-  } else if (u.pathname == "/header") {
+  }
+
+  else if (u.pathname === "/header") {
     var val = req.headers["x-test-header"];
     if (val) {
       res.setHeader("X-Received-Test-Header", val);
     }
-  } else if (u.pathname == "/push") {
-    res.push('/push.js',
-      { 'content-type': 'application/javascript',
-        'pushed' : 'yes',
-        'content-length' : 11,
-        'X-Connection-Spdy': 'yes'},
-      function(err, stream) {
-        if (err) return;
-        stream.end('// comments');
-      });
+  }
+
+  else if (u.pathname === "/push") {
+    push = res.push('/push.js');
+    push.writeHead(200, {
+      'content-type': 'application/javascript',
+      'pushed' : 'yes',
+      'content-length' : 11,
+      'X-Connection-Http2': 'yes'
+    });
+    push.end('// comments');
     content = '<head> <script src="push.js"/></head>body text';
-  } else if (u.pathname == "/push2") {
-    res.push('/push2.js',
-      { 'content-type': 'application/javascript',
-        'pushed' : 'yes',
-        // no content-length
-        'X-Connection-Spdy': 'yes'},
-      function(err, stream) {
-        if (err) return;
-        stream.end('// comments');
-      });
+  }
+
+  else if (u.pathname === "/push2") {
+    push = res.push('/push2.js');
+    push.writeHead(200, {
+      'content-type': 'application/javascript',
+      'pushed' : 'yes',
+      // no content-length
+      'X-Connection-Http2': 'yes'
+    });
+    push.end('// comments');
     content = '<head> <script src="push2.js"/></head>body text';
-  } else if (u.pathname == "/big") {
-    content = getHugeContent(128 * 1024);
+  }
+
+  else if (u.pathname === "/big") {
+    content = generateContent(128 * 1024);
     var hash = crypto.createHash('md5');
     hash.update(content);
     var md5 = hash.digest('hex');
     res.setHeader("X-Expected-MD5", md5);
-  } else if (u.pathname == "/post") {
+  }
+
+  else if (u.pathname === "/post") {
     if (req.method != "POST") {
       res.writeHead(405);
       res.end('Unexpected method: ' + req.method);
       return;
     }
 
-    post_hash = crypto.createHash('md5');
-    req.on('data', receivePostData);
-    req.on('end', function () { finishPost(res, content); });
+    var post_hash = crypto.createHash('md5');
+    req.on('data', function receivePostData(chunk) {
+      post_hash.update(chunk.toString());
+    });
+    req.on('end', function finishPost() {
+      var md5 = post_hash.digest('hex');
+      res.setHeader('X-Calculated-MD5', md5);
+      res.writeHead(200);
+      res.end(content);
+    });
 
     return;
   }
@@ -122,7 +158,8 @@ function handleRequest(req, res) {
 var options = {
   key: fs.readFileSync(__dirname + '/../moz-spdy/spdy-key.pem'),
   cert: fs.readFileSync(__dirname + '/../moz-spdy/spdy-cert.pem'),
-  ca: fs.readFileSync(__dirname + '/../moz-spdy/spdy-ca.pem')
+  ca: fs.readFileSync(__dirname + '/../moz-spdy/spdy-ca.pem'),
+  settings: {} // Dafault is to turn off incoming flow control, but this does not work in Firefox!!
 };
 
 var server = http2.createServer(options, handleRequest);
