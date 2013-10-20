@@ -1,4 +1,4 @@
-// test spdy/3
+// test HTTP/2
 
 var Ci = Components.interfaces;
 var Cc = Components.classes;
@@ -23,7 +23,7 @@ var md5s = ['f1b708bba17f1ce948dc979f4d7092bc',
 var bigListenerData = generateContent(128 * 1024);
 var bigListenerMD5 = '8f607cfdd2c87d6a7eedb657dafbd836';
 
-function checkIsSpdy(request) {
+function checkIsHttp2(request) {
   try {
     if (request.getResponseHeader("X-Firefox-Spdy") == "Http2/Draft06") {
       if (request.getResponseHeader("X-Connection-Http2") == "yes") {
@@ -37,12 +37,12 @@ function checkIsSpdy(request) {
   return false;
 }
 
-var SpdyCheckListener = function() {};
+var Http2CheckListener = function() {};
 
-SpdyCheckListener.prototype = {
+Http2CheckListener.prototype = {
   onStartRequestFired: false,
   onDataAvailableFired: false,
-  isSpdyConnection: false,
+  isHttp2Connection: false,
 
   onStartRequest: function testOnStartRequest(request, ctx) {
     this.onStartRequestFired = true;
@@ -58,7 +58,7 @@ SpdyCheckListener.prototype = {
 
   onDataAvailable: function testOnDataAvailable(request, ctx, stream, off, cnt) {
     this.onDataAvailableFired = true;
-    this.isSpdyConnection = checkIsSpdy(request);
+    this.isHttp2Connection = checkIsHttp2(request);
 
     read_stream(stream, cnt);
   },
@@ -66,7 +66,7 @@ SpdyCheckListener.prototype = {
   onStopRequest: function testOnStopRequest(request, ctx, status) {
     do_check_true(this.onStartRequestFired);
     do_check_true(this.onDataAvailableFired);
-    do_check_true(this.isSpdyConnection);
+    do_check_true(this.isHttp2Connection);
 
     run_next_test();
     do_test_finished();
@@ -89,25 +89,25 @@ function register_completed_channel(listener) {
 }
 
 /* Listener class to control the testing of multiplexing */
-var SpdyMultiplexListener = function() {};
+var Http2MultiplexListener = function() {};
 
-SpdyMultiplexListener.prototype = new SpdyCheckListener();
+Http2MultiplexListener.prototype = new Http2CheckListener();
 
-SpdyMultiplexListener.prototype.streamID = 0;
-SpdyMultiplexListener.prototype.buffer = "";
+Http2MultiplexListener.prototype.streamID = 0;
+Http2MultiplexListener.prototype.buffer = "";
 
-SpdyMultiplexListener.prototype.onDataAvailable = function(request, ctx, stream, off, cnt) {
+Http2MultiplexListener.prototype.onDataAvailable = function(request, ctx, stream, off, cnt) {
   this.onDataAvailableFired = true;
-  this.isSpdyConnection = checkIsSpdy(request);
-  this.streamID = parseInt(request.getResponseHeader("X-Spdy-StreamID"));
+  this.isHttp2Connection = checkIsHttp2(request);
+  this.streamID = parseInt(request.getResponseHeader("X-Http2-StreamID"));
   var data = read_stream(stream, cnt);
   this.buffer = this.buffer.concat(data);
 };
 
-SpdyMultiplexListener.prototype.onStopRequest = function(request, ctx, status) {
+Http2MultiplexListener.prototype.onStopRequest = function(request, ctx, status) {
   do_check_true(this.onStartRequestFired);
   do_check_true(this.onDataAvailableFired);
-  do_check_true(this.isSpdyConnection);
+  do_check_true(this.isHttp2Connection);
   do_check_true(this.buffer == multiplexContent);
   
   // This is what does most of the hard work for us
@@ -115,27 +115,27 @@ SpdyMultiplexListener.prototype.onStopRequest = function(request, ctx, status) {
 };
 
 // Does the appropriate checks for header gatewaying
-var SpdyHeaderListener = function(value) {
+var Http2HeaderListener = function(value) {
   this.value = value
 };
 
-SpdyHeaderListener.prototype = new SpdyCheckListener();
-SpdyHeaderListener.prototype.value = "";
+Http2HeaderListener.prototype = new Http2CheckListener();
+Http2HeaderListener.prototype.value = "";
 
-SpdyHeaderListener.prototype.onDataAvailable = function(request, ctx, stream, off, cnt) {
+Http2HeaderListener.prototype.onDataAvailable = function(request, ctx, stream, off, cnt) {
   this.onDataAvailableFired = true;
-  this.isSpdyConnection = checkIsSpdy(request);
+  this.isHttp2Connection = checkIsHttp2(request);
   do_check_eq(request.getResponseHeader("X-Received-Test-Header"), this.value);
   read_stream(stream, cnt);
 };
 
-var SpdyPushListener = function() {};
+var Http2PushListener = function() {};
 
-SpdyPushListener.prototype = new SpdyCheckListener();
+Http2PushListener.prototype = new Http2CheckListener();
 
-SpdyPushListener.prototype.onDataAvailable = function(request, ctx, stream, off, cnt) {
+Http2PushListener.prototype.onDataAvailable = function(request, ctx, stream, off, cnt) {
   this.onDataAvailableFired = true;
-  this.isSpdyConnection = checkIsSpdy(request);
+  this.isHttp2Connection = checkIsHttp2(request);
   if (ctx.originalURI.spec == "https://localhost:4444/push.js" ||
       ctx.originalURI.spec == "https://localhost:4444/push2.js") {
     do_check_eq(request.getResponseHeader("pushed"), "yes");
@@ -144,24 +144,24 @@ SpdyPushListener.prototype.onDataAvailable = function(request, ctx, stream, off,
 };
 
 // Does the appropriate checks for a large GET response
-var SpdyBigListener = function() {};
+var Http2BigListener = function() {};
 
-SpdyBigListener.prototype = new SpdyCheckListener();
-SpdyBigListener.prototype.buffer = "";
+Http2BigListener.prototype = new Http2CheckListener();
+Http2BigListener.prototype.buffer = "";
 
-SpdyBigListener.prototype.onDataAvailable = function(request, ctx, stream, off, cnt) {
+Http2BigListener.prototype.onDataAvailable = function(request, ctx, stream, off, cnt) {
   this.onDataAvailableFired = true;
-  this.isSpdyConnection = checkIsSpdy(request);
+  this.isHttp2Connection = checkIsHttp2(request);
   this.buffer = this.buffer.concat(read_stream(stream, cnt));
   // We know the server should send us the same data as our big post will be,
   // so the md5 should be the same
   do_check_eq(bigListenerMD5, request.getResponseHeader("X-Expected-MD5"));
 };
 
-SpdyBigListener.prototype.onStopRequest = function(request, ctx, status) {
+Http2BigListener.prototype.onStopRequest = function(request, ctx, status) {
   do_check_true(this.onStartRequestFired);
   do_check_true(this.onDataAvailableFired);
-  do_check_true(this.isSpdyConnection);
+  do_check_true(this.isHttp2Connection);
 
   // Don't want to flood output, so don't use do_check_eq
   do_check_true(this.buffer == bigListenerData);
@@ -171,16 +171,16 @@ SpdyBigListener.prototype.onStopRequest = function(request, ctx, status) {
 };
 
 // Does the appropriate checks for POSTs
-var SpdyPostListener = function(expected_md5) {
+var Http2PostListener = function(expected_md5) {
   this.expected_md5 = expected_md5;
 };
 
-SpdyPostListener.prototype = new SpdyCheckListener();
-SpdyPostListener.prototype.expected_md5 = "";
+Http2PostListener.prototype = new Http2CheckListener();
+Http2PostListener.prototype.expected_md5 = "";
 
-SpdyPostListener.prototype.onDataAvailable = function(request, ctx, stream, off, cnt) {
+Http2PostListener.prototype.onDataAvailable = function(request, ctx, stream, off, cnt) {
   this.onDataAvailableFired = true;
-  this.isSpdyConnection = checkIsSpdy(request);
+  this.isHttp2Connection = checkIsHttp2(request);
   read_stream(stream, cnt);
   do_check_eq(this.expected_md5, request.getResponseHeader("X-Calculated-MD5"));
 };
@@ -192,10 +192,10 @@ function makeChan(url) {
   return chan;
 }
 
-// Make sure we make a spdy connection and both us and the server mark it as such
-function test_spdy_basic() {
+// Make sure we make a HTTP2 connection and both us and the server mark it as such
+function test_http2_basic() {
   var chan = makeChan("https://localhost:4444/");
-  var listener = new SpdyCheckListener();
+  var listener = new Http2CheckListener();
   chan.asyncOpen(listener, null);
 }
 
@@ -206,13 +206,13 @@ function checkXhr(xhr) {
   }
 
   do_check_eq(xhr.status, 200);
-  do_check_eq(checkIsSpdy(xhr), true);
+  do_check_eq(checkIsHttp2(xhr), true);
   run_next_test();
   do_test_finished();
 }
 
 // Fires off an XHR request over SPDY
-function test_spdy_xhr() {
+function test_http2_xhr() {
   var req = Cc["@mozilla.org/xmlextras/xmlhttprequest;1"]
             .createInstance(Ci.nsIXMLHttpRequest);
   req.open("GET", "https://localhost:4444/", true);
@@ -222,56 +222,56 @@ function test_spdy_xhr() {
 }
 
 // Test to make sure we get multiplexing right
-function test_spdy_multiplex() {
+function test_http2_multiplex() {
   var chan1 = makeChan("https://localhost:4444/multiplex1");
   var chan2 = makeChan("https://localhost:4444/multiplex2");
-  var listener1 = new SpdyMultiplexListener();
-  var listener2 = new SpdyMultiplexListener();
+  var listener1 = new Http2MultiplexListener();
+  var listener2 = new Http2MultiplexListener();
   chan1.asyncOpen(listener1, null);
   chan2.asyncOpen(listener2, null);
 }
 
 // Test to make sure we gateway non-standard headers properly
-function test_spdy_header() {
+function test_http2_header() {
   var chan = makeChan("https://localhost:4444/header");
   var hvalue = "Headers are fun";
-  var listener = new SpdyHeaderListener(hvalue);
+  var listener = new Http2HeaderListener(hvalue);
   chan.setRequestHeader("X-Test-Header", hvalue, false);
   chan.asyncOpen(listener, null);
 }
 
-function test_spdy_push1() {
+function test_http2_push1() {
   var chan = makeChan("https://localhost:4444/push");
   chan.loadGroup = loadGroup;
-  var listener = new SpdyPushListener();
+  var listener = new Http2PushListener();
   chan.asyncOpen(listener, chan);
 }
 
-function test_spdy_push2() {
+function test_http2_push2() {
   var chan = makeChan("https://localhost:4444/push.js");
   chan.loadGroup = loadGroup;
-  var listener = new SpdyPushListener();
+  var listener = new Http2PushListener();
   chan.asyncOpen(listener, chan);
 }
 
-function test_spdy_push3() {
+function test_http2_push3() {
   var chan = makeChan("https://localhost:4444/push2");
   chan.loadGroup = loadGroup;
-  var listener = new SpdyPushListener();
+  var listener = new Http2PushListener();
   chan.asyncOpen(listener, chan);
 }
 
-function test_spdy_push4() {
+function test_http2_push4() {
   var chan = makeChan("https://localhost:4444/push2.js");
   chan.loadGroup = loadGroup;
-  var listener = new SpdyPushListener();
+  var listener = new Http2PushListener();
   chan.asyncOpen(listener, chan);
 }
 
 // Make sure we handle GETs that cover more than 2 frames properly
-function test_spdy_big() {
+function test_http2_big() {
   var chan = makeChan("https://localhost:4444/big");
-  var listener = new SpdyBigListener();
+  var listener = new Http2BigListener();
   chan.asyncOpen(listener, null);
 }
 
@@ -290,16 +290,16 @@ function do_post(content, chan, listener) {
 }
 
 // Make sure we can do a simple POST
-function test_spdy_post() {
+function test_http2_post() {
   var chan = makeChan("https://localhost:4444/post");
-  var listener = new SpdyPostListener(md5s[0]);
+  var listener = new Http2PostListener(md5s[0]);
   do_post(posts[0], chan, listener);
 }
 
 // Make sure we can do a POST that covers more than 2 frames
-function test_spdy_post_big() {
+function test_http2_post_big() {
   var chan = makeChan("https://localhost:4444/post");
-  var listener = new SpdyPostListener(md5s[1]);
+  var listener = new Http2PostListener(md5s[1]);
   do_post(posts[1], chan, listener);
 }
 
@@ -308,17 +308,17 @@ function test_spdy_post_big() {
 //
 // make sure post_big runs first to test race condition in restarting
 // a stalled stream when a SETTINGS frame arrives
-var tests = [ test_spdy_post_big
-            , test_spdy_basic
-            , test_spdy_push1
-            , test_spdy_push2
-            , test_spdy_push3
-            , test_spdy_push4
-            , test_spdy_xhr
-            , test_spdy_header
-            , test_spdy_multiplex
-            , test_spdy_big
-            , test_spdy_post
+var tests = [ test_http2_post_big
+            , test_http2_basic
+            , test_http2_push1
+            , test_http2_push2
+            , test_http2_push3
+            , test_http2_push4
+            , test_http2_xhr
+            , test_http2_header
+            , test_http2_multiplex
+            , test_http2_big
+            , test_http2_post
             ];
 var current_test = 0;
 

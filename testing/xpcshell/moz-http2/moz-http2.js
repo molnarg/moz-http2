@@ -61,7 +61,7 @@ function handleRequest(req, res) {
 
   if (req.httpVersionMajor === 2) {
     res.setHeader('X-Connection-Http2', 'yes');
-    res.setHeader('X-Spdy-StreamId', '' + req.stream.id);
+    res.setHeader('X-Http2-StreamId', '' + req.stream.id);
   } else {
     res.setHeader('X-Connection-Http2', 'no');
   }
@@ -160,6 +160,7 @@ var options = {
   cert: fs.readFileSync(__dirname + '/../moz-spdy/spdy-cert.pem'),
   ca: fs.readFileSync(__dirname + '/../moz-spdy/spdy-ca.pem'),
   settings: {} // Dafault is to turn off incoming flow control, but this does not work in Firefox!!
+  //, log: require('../node-http2/test/util').createLogger('server')
 };
 
 var server = http2.createServer(options, handleRequest);
