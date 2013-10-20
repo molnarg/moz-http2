@@ -25,8 +25,8 @@ var bigListenerMD5 = '8f607cfdd2c87d6a7eedb657dafbd836';
 
 function checkIsSpdy(request) {
   try {
-    if (request.getResponseHeader("X-Firefox-Spdy") == "3") {
-      if (request.getResponseHeader("X-Connection-Spdy") == "yes") {
+    if (request.getResponseHeader("X-Firefox-Spdy") == "Http2/Draft06") {
+      if (request.getResponseHeader("X-Connection-Http2") == "yes") {
         return true;
       }
       return false; // Weird case, but the server disagrees with us
@@ -136,8 +136,8 @@ SpdyPushListener.prototype = new SpdyCheckListener();
 SpdyPushListener.prototype.onDataAvailable = function(request, ctx, stream, off, cnt) {
   this.onDataAvailableFired = true;
   this.isSpdyConnection = checkIsSpdy(request);
-  if (ctx.originalURI.spec == "https://localhost:4443/push.js" ||
-      ctx.originalURI.spec == "https://localhost:4443/push2.js") {
+  if (ctx.originalURI.spec == "https://localhost:4444/push.js" ||
+      ctx.originalURI.spec == "https://localhost:4444/push2.js") {
     do_check_eq(request.getResponseHeader("pushed"), "yes");
   }
   read_stream(stream, cnt);
@@ -194,7 +194,7 @@ function makeChan(url) {
 
 // Make sure we make a spdy connection and both us and the server mark it as such
 function test_spdy_basic() {
-  var chan = makeChan("https://localhost:4443/");
+  var chan = makeChan("https://localhost:4444/");
   var listener = new SpdyCheckListener();
   chan.asyncOpen(listener, null);
 }
@@ -215,7 +215,7 @@ function checkXhr(xhr) {
 function test_spdy_xhr() {
   var req = Cc["@mozilla.org/xmlextras/xmlhttprequest;1"]
             .createInstance(Ci.nsIXMLHttpRequest);
-  req.open("GET", "https://localhost:4443/", true);
+  req.open("GET", "https://localhost:4444/", true);
   req.addEventListener("readystatechange", function (evt) { checkXhr(req); },
                        false);
   req.send(null);
@@ -223,8 +223,8 @@ function test_spdy_xhr() {
 
 // Test to make sure we get multiplexing right
 function test_spdy_multiplex() {
-  var chan1 = makeChan("https://localhost:4443/multiplex1");
-  var chan2 = makeChan("https://localhost:4443/multiplex2");
+  var chan1 = makeChan("https://localhost:4444/multiplex1");
+  var chan2 = makeChan("https://localhost:4444/multiplex2");
   var listener1 = new SpdyMultiplexListener();
   var listener2 = new SpdyMultiplexListener();
   chan1.asyncOpen(listener1, null);
@@ -233,7 +233,7 @@ function test_spdy_multiplex() {
 
 // Test to make sure we gateway non-standard headers properly
 function test_spdy_header() {
-  var chan = makeChan("https://localhost:4443/header");
+  var chan = makeChan("https://localhost:4444/header");
   var hvalue = "Headers are fun";
   var listener = new SpdyHeaderListener(hvalue);
   chan.setRequestHeader("X-Test-Header", hvalue, false);
@@ -241,28 +241,28 @@ function test_spdy_header() {
 }
 
 function test_spdy_push1() {
-  var chan = makeChan("https://localhost:4443/push");
+  var chan = makeChan("https://localhost:4444/push");
   chan.loadGroup = loadGroup;
   var listener = new SpdyPushListener();
   chan.asyncOpen(listener, chan);
 }
 
 function test_spdy_push2() {
-  var chan = makeChan("https://localhost:4443/push.js");
+  var chan = makeChan("https://localhost:4444/push.js");
   chan.loadGroup = loadGroup;
   var listener = new SpdyPushListener();
   chan.asyncOpen(listener, chan);
 }
 
 function test_spdy_push3() {
-  var chan = makeChan("https://localhost:4443/push2");
+  var chan = makeChan("https://localhost:4444/push2");
   chan.loadGroup = loadGroup;
   var listener = new SpdyPushListener();
   chan.asyncOpen(listener, chan);
 }
 
 function test_spdy_push4() {
-  var chan = makeChan("https://localhost:4443/push2.js");
+  var chan = makeChan("https://localhost:4444/push2.js");
   chan.loadGroup = loadGroup;
   var listener = new SpdyPushListener();
   chan.asyncOpen(listener, chan);
@@ -270,7 +270,7 @@ function test_spdy_push4() {
 
 // Make sure we handle GETs that cover more than 2 frames properly
 function test_spdy_big() {
-  var chan = makeChan("https://localhost:4443/big");
+  var chan = makeChan("https://localhost:4444/big");
   var listener = new SpdyBigListener();
   chan.asyncOpen(listener, null);
 }
@@ -291,14 +291,14 @@ function do_post(content, chan, listener) {
 
 // Make sure we can do a simple POST
 function test_spdy_post() {
-  var chan = makeChan("https://localhost:4443/post");
+  var chan = makeChan("https://localhost:4444/post");
   var listener = new SpdyPostListener(md5s[0]);
   do_post(posts[0], chan, listener);
 }
 
 // Make sure we can do a POST that covers more than 2 frames
 function test_spdy_post_big() {
-  var chan = makeChan("https://localhost:4443/post");
+  var chan = makeChan("https://localhost:4444/post");
   var listener = new SpdyPostListener(md5s[1]);
   do_post(posts[1], chan, listener);
 }
@@ -320,6 +320,7 @@ var tests = [ test_spdy_post_big
             , test_spdy_big
             , test_spdy_post
             ];
+var tests = [ test_spdy_basic ];
 var current_test = 0;
 
 function run_next_test() {
@@ -387,6 +388,7 @@ var prefs;
 var spdypref;
 var spdy3pref;
 var spdypush;
+var http2pref;
 
 var loadGroup;
 
@@ -394,6 +396,7 @@ function resetPrefs() {
   prefs.setBoolPref("network.http.spdy.enabled", spdypref);
   prefs.setBoolPref("network.http.spdy.enabled.v3", spdy3pref);
   prefs.setBoolPref("network.http.spdy.allow-push", spdypush);
+  prefs.setBoolPref("network.http.spdy.enabled.http2draft", http2pref);
 }
 
 function run_test() {
@@ -403,7 +406,7 @@ function run_test() {
   var oldPref = prefs.getIntPref("network.http.speculative-parallel-limit");
   prefs.setIntPref("network.http.speculative-parallel-limit", 0);
 
-  addCertOverride("localhost", 4443,
+  addCertOverride("localhost", 4444,
                   Ci.nsICertOverrideService.ERROR_UNTRUSTED |
                   Ci.nsICertOverrideService.ERROR_MISMATCH |
                   Ci.nsICertOverrideService.ERROR_TIME);
@@ -414,9 +417,11 @@ function run_test() {
   spdypref = prefs.getBoolPref("network.http.spdy.enabled");
   spdy3pref = prefs.getBoolPref("network.http.spdy.enabled.v3");
   spdypush = prefs.getBoolPref("network.http.spdy.allow-push");
+  http2pref = prefs.getBoolPref("network.http.spdy.enabled.http2draft");
   prefs.setBoolPref("network.http.spdy.enabled", true);
   prefs.setBoolPref("network.http.spdy.enabled.v3", true);
   prefs.setBoolPref("network.http.spdy.allow-push", true);
+  prefs.setBoolPref("network.http.spdy.enabled.http2draft", true);
 
   loadGroup = Cc["@mozilla.org/network/load-group;1"].createInstance(Ci.nsILoadGroup);
 
