@@ -93,6 +93,11 @@ nvFIFO::Clear()
 const nvPair *
 nvFIFO::operator[] (int32_t index) const
 {
+  if (index >= mTable.GetSize()) {
+    MOZ_ASSERT(false);
+    NS_WARNING("nvFIFO Table Out of Range");
+    return nullptr;
+  }
   return static_cast<nvPair *>(mTable.ObjectAt(index));
 }
   
