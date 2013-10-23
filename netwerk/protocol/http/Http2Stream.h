@@ -89,6 +89,7 @@ public:
   nsresult ConvertResponseHeaders(Http2Decompressor *, nsACString &, nsACString &);
   nsresult ConvertPushHeaders(Http2Decompressor *, nsACString &, nsACString &);
 
+  bool AllowFlowControlledWrite();
   void UpdateServerReceiveWindow(int32_t delta);
   int64_t ServerReceiveWindow() { return mServerReceiveWindow; }
 

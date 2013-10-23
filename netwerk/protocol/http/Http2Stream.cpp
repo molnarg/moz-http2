@@ -868,18 +868,24 @@ Http2Stream::Close(nsresult reason)
   mTransaction->Close(reason);
 }
 
+bool
+Http2Stream::AllowFlowControlledWrite()
+{
+  if (!mSession->ServerUsesFlowControl())
+    return true;
+
+  return (mSession->ServerSessionWindow() > 0) && (mServerReceiveWindow > 0);
+}
+
 void
 Http2Stream::UpdateServerReceiveWindow(int32_t delta)
 {
   mServerReceiveWindow += delta;
   
-  // If the stream had a <=0 window, that has now opened
-  // schedule it for writing again
-  if (mBlockedOnRwin && mSession->ServerSessionWindow() > 0 &&
-      mServerReceiveWindow > 0) {
-    // the window has been opened :)
-    mSession->TransactionHasDataToWrite(this);
-  }
+  if (mBlockedOnRwin && AllowFlowControlledWrite()) {
+    LOG3(("Http2Stream::UpdateServerReceived UnPause %p 0x%X "
+          "Open stream window\n", this, mStreamID));
+    mSession->TransactionHasDataToWrite(this);  }
 }
 
 void
@@ -982,8 +988,7 @@ Http2Stream::OnReadSegment(const char *buf,
   case GENERATING_BODY:
     // if there is session flow control and either the stream window is active and
     // exhaused or the session window is exhausted then suspend
-    if (mSession->ServerUsesFlowControl() &&
-        ((mServerReceiveWindow <= 0) || (mSession->ServerSessionWindow() <= 0))) {
+    if (!AllowFlowControlledWrite()) {
       *countRead = 0;
       LOG3(("Http2Stream this=%p, id 0x%X request body suspended because "
             "remote window is stream=%ld session=%ld.\n", this, mStreamID,
