@@ -1935,11 +1935,19 @@ Http2Session::WriteSegments(nsAHttpSegmentWriter *writer,
       PR_ntohl(reinterpret_cast<uint32_t *>(mInputFrameBuffer.get())[1]);
     mInputFrameID &= 0x7fffffff;
     mInputFrameDataRead = 0;
- 
+
     if (mInputFrameType == FRAME_TYPE_DATA || mInputFrameType == FRAME_TYPE_HEADERS)  {
       mInputFrameFinal = mInputFrameFlags & kFlag_END_STREAM; 
     } else {
       mInputFrameFinal = 0;
+    }
+
+    if (mInputFrameDataSize >= 0x4000) {
+      // Section 9.1 HTTP frames cannot exceed 2^14 - 1 but receviers must ignore
+      // those bits
+      LOG3(("Http2Session::WriteSegments %p WARNING Frame Length bits past 14 are not 0 %08X\n",
+            this, mInputFrameDataSize));
+      mInputFrameDataSize &= 0x3fff;
     }
 
     LOG3(("Http2Session::WriteSegments[%p::%x] Frame Header Read "
@@ -1964,12 +1972,6 @@ Http2Session::WriteSegments(nsAHttpSegmentWriter *writer,
       LOG3(("Expected CONTINUATION of PUSH PROMISE for ID 0x%X\n",
             mExpectedPushPromiseID));
       ReturnSessionError(this, PROTOCOL_ERROR);
-    }
-
-    if (mInputFrameDataSize >= 0x4000) {
-      // Section 9.1 HTTP frames cannot exceed 2^14 - 1
-      LOG3(("Http2Session::WriteSegments %p Frame Too Large\n", this));
-      ReturnSessionError(this, FRAME_TOO_LARGE_ERROR);
     }
 
     if (mDownstreamState == BUFFERING_OPENING_SETTINGS &&
