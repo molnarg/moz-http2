@@ -1210,7 +1210,14 @@ Http2Session::RecvSettings(Http2Session *self)
 
     case SETTINGS_TYPE_FLOW_CONTROL:
       if (value & 1) {
+        LOG3(("Http2Session::RecvSettings %p DISABLE FLOW CONTROL\n", self));
         self->mServerUsesFlowControl = false;
+
+        // we need to touch all existing streams to unpause any that were
+        // flow control restricted
+        int32_t delta = 0;
+        self->mStreamTransactionHash.Enumerate(UpdateServerRwinEnumerator,
+                                               &delta);
       } else {
         if (!self->mServerUsesFlowControl) {
           // clearing this setting is a protocol error
