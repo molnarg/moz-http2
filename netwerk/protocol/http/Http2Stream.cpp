@@ -85,7 +85,7 @@ Http2Stream::Http2Stream(nsAHttpTransaction *httpTransaction,
     httpPriority = kNormalPriority + priority;
   }
   MOZ_ASSERT(httpPriority >= 0);
-  mPriority = (uint32_t)httpPriority;
+  mPriority = static_cast<uint32_t>(httpPriority);
 }
 
 Http2Stream::~Http2Stream()
@@ -793,7 +793,7 @@ Http2Stream::ConvertResponseHeaders(Http2Decompressor *decompressor,
   aHeadersOut.SetCapacity(aHeadersIn.Length() + 512);
 
   nsresult rv =
-    decompressor->DecodeHeaderBlock((const uint8_t *) aHeadersIn.BeginReading(),
+    decompressor->DecodeHeaderBlock(reinterpret_cast<const uint8_t *>(aHeadersIn.BeginReading()),
                                     aHeadersIn.Length(),
                                     aHeadersOut);
   if (NS_FAILED(rv)) {
@@ -830,7 +830,7 @@ Http2Stream::ConvertPushHeaders(Http2Decompressor *decompressor,
 {
   aHeadersOut.Truncate();
   nsresult rv =
-    decompressor->DecodeHeaderBlock((const uint8_t *) aHeadersIn.BeginReading(),
+    decompressor->DecodeHeaderBlock(reinterpret_cast<const uint8_t *>(aHeadersIn.BeginReading()),
                                     aHeadersIn.Length(),
                                     aHeadersOut);
   if (NS_FAILED(rv)) {

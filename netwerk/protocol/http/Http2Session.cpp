@@ -200,7 +200,7 @@ Http2Session::LogIO(Http2Session *self, Http2Stream *stream,
       line += 10;
     }
     PR_snprintf(line, 128 - (line - linebuf), "%02X ",
-                ((uint8_t *)data)[index]);
+                (reinterpret_cast<const uint8_t *>(data))[index]);
     line += 3;
   }
   if (index) {
@@ -628,7 +628,7 @@ Http2Session::UncompressAndDiscard()
   nsresult rv;
   nsAutoCString trash;
 
-  rv = mDecompressor.DecodeHeaderBlock((const uint8_t *) mDecompressBuffer.BeginReading(),
+  rv = mDecompressor.DecodeHeaderBlock(reinterpret_cast<const uint8_t *>(mDecompressBuffer.BeginReading()),
                                        mDecompressBuffer.Length(), trash);
   mDecompressBuffer.Truncate();
   if (NS_FAILED(rv)) {
@@ -1413,7 +1413,7 @@ Http2Session::RecvPushPromise(Http2Session *self)
 
   static_assert(Http2Stream::kWorstPriority >= 0,
                 "kWorstPriority out of range");
-  uint32_t unsignedPriority = (uint32_t) Http2Stream::kWorstPriority;
+  uint32_t unsignedPriority = static_cast<uint32_t>(Http2Stream::kWorstPriority);
   pushedStream->SetPriority(unsignedPriority);
   self->GeneratePriority(promisedID, unsignedPriority);
   self->ResetDownstreamState();
