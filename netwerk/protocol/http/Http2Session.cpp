@@ -1431,7 +1431,7 @@ Http2Session::RecvPing(Http2Session *self)
   if (self->mInputFrameDataSize != 8) {
     LOG3(("Http2Session::RecvPing %p PING had wrong amount of data %d",
           self, self->mInputFrameDataSize));
-    ReturnSessionError(self, PROTOCOL_ERROR);
+    ReturnSessionError(self, FRAME_SIZE_ERROR);
   }
 
   if (self->mInputFrameID) {
