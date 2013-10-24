@@ -104,7 +104,7 @@ public:
   const static uint8_t kFlag_END_STREAM = 0x01; // data, headers
   const static uint8_t kFlag_END_HEADERS = 0x04; // headers, continuation
   const static uint8_t kFlag_PRIORITY = 0x08; //headers
-  const static uint8_t kFlag_END_PUSH_PROMISE = 0x01; // push promise
+  const static uint8_t kFlag_END_PUSH_PROMISE = 0x04; // push promise
   const static uint8_t kFlag_ACK = 0x01; // ping and settings
 
   enum {
