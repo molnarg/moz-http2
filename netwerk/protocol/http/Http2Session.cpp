@@ -1190,6 +1190,16 @@ Http2Session::RecvSettings(Http2Session *self)
 
     switch (id)
     {
+    case SETTINGS_TYPE_HEADER_TABLE_SIZE:
+      LOG3(("Compression header table setting received: %d\n", value));
+      // TODO
+      break;
+
+    case SETTINGS_TYPE_ENABLE_PUSH:
+      LOG3(("Client received an ENABLE Push SETTING. Odd.\n"));
+      // nop
+      break;
+
     case SETTINGS_TYPE_MAX_CONCURRENT:
       self->mMaxConcurrent = value;
       Telemetry::Accumulate(Telemetry::SPDY_SETTINGS_MAX_STREAMS, value);

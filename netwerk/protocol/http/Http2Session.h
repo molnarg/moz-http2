@@ -108,6 +108,8 @@ public:
   const static uint8_t kFlag_ACK = 0x01; // ping and settings
 
   enum {
+    SETTINGS_TYPE_HEADER_TABLE_SIZE = 1, // compression table size
+    SETTINGS_TYPE_ENABLE_PUSH = 2,     // can be used to disable push
     SETTINGS_TYPE_MAX_CONCURRENT = 4,  // streams recvr allowed to initiate
     SETTINGS_TYPE_INITIAL_WINDOW = 7,  // bytes for flow control default
     SETTINGS_TYPE_FLOW_CONTROL = 10    // flow control details
