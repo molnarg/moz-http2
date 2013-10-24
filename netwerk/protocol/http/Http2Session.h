@@ -89,12 +89,14 @@ public:
     PROTOCOL_ERROR = 1,
     INTERNAL_ERROR = 2,
     FLOW_CONTROL_ERROR = 3,
-    UNUSED1_ERROR = 4,
+    SETTINGS_TIMEOUT_ERROR = 4,
     STREAM_CLOSED_ERROR = 5,
     FRAME_SIZE_ERROR = 6,
     REFUSED_STREAM_ERROR = 7,
     CANCEL_ERROR = 8,
-    COMPRESSION_ERROR = 9
+    COMPRESSION_ERROR = 9,
+    CONNECT_ERROR = 10,
+    ENHANCE_YOUR_CALM = 420
   };
 
   // These are frame flags. If they, or other undefined flags, are
