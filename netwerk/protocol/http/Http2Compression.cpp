@@ -676,6 +676,12 @@ Http2Compressor::EncodeHeaderBlock(const nsCString &nvInput,
       continue;
     }
 
+    // colon headers are for http/2 and this is http/1 input, so that
+    // is probably a smuggling attack of some kind
+    if(*(name.BeginReading()) == ':') {
+      continue;
+    }
+
     int32_t valueIndex = colonIndex + 1;
 
     // if we have Expect: *100-continue,*" redact the 100-continue
