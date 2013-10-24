@@ -641,18 +641,18 @@ Http2Session::UncompressAndDiscard()
 }
 
 void
-Http2Session::GeneratePing(bool isPong)
+Http2Session::GeneratePing(bool isAck)
 {
   MOZ_ASSERT(PR_GetCurrentThread() == gSocketThread);
-  LOG3(("Http2Session::GeneratePing %p ispong=%d\n", this, isPong));
+  LOG3(("Http2Session::GeneratePing %p isAck=%d\n", this, isAck));
 
   EnsureBuffer(mOutputQueueBuffer, mOutputQueueUsed + 16,
                mOutputQueueUsed, mOutputQueueSize);
   char *packet = mOutputQueueBuffer.get() + mOutputQueueUsed;
   mOutputQueueUsed += 16;
 
-  if (isPong) {
-    CreateFrameHeader(packet, 8, FRAME_TYPE_PING, kFlag_PONG, 0);
+  if (isAck) {
+    CreateFrameHeader(packet, 8, FRAME_TYPE_PING, kFlag_ACK, 0);
     memcpy(packet + 8, mInputFrameBuffer.get() + 8, 8);
   } else {
     CreateFrameHeader(packet, 8, FRAME_TYPE_PING, 0, 0);
@@ -1440,11 +1440,11 @@ Http2Session::RecvPing(Http2Session *self)
     ReturnSessionError(self, PROTOCOL_ERROR);
   }
   
-  if (self->mInputFrameFlags & kFlag_PONG) {
+  if (self->mInputFrameFlags & kFlag_ACK) {
     // presumably a reply to our timeout ping.. don't reply to it
     self->mPingSentEpoch = 0;
   } else {
-    // reply with a pong
+    // reply with a ack'd ping
     self->GeneratePing(true);
   }
 

@@ -99,11 +99,11 @@ public:
 
   // These are frame flags. If they, or other undefined flags, are
   // used on frames other than the comments indicate they MUST be ignored.
-  const static uint8_t kFlag_END_STREAM = 0x01; // data, headers, continuation
+  const static uint8_t kFlag_END_STREAM = 0x01; // data, headers
   const static uint8_t kFlag_END_HEADERS = 0x04; // headers, continuation
   const static uint8_t kFlag_PRIORITY = 0x08; //headers
   const static uint8_t kFlag_END_PUSH_PROMISE = 0x01; // push promise
-  const static uint8_t kFlag_PONG = 0x01; // ping
+  const static uint8_t kFlag_ACK = 0x01; // ping and settings
 
   enum {
     SETTINGS_TYPE_MAX_CONCURRENT = 4,  // streams recvr allowed to initiate
