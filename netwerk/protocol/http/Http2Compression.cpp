@@ -362,7 +362,7 @@ Http2Decompressor::CopyStringFromInput(uint32_t bytes, nsACString &val)
   if (mOffset + bytes > mDataLen)
     return NS_ERROR_ILLEGAL_VALUE;
 
-  val.Assign((const char *)mData + mOffset, bytes);
+  val.Assign(reinterpret_cast<const char *>(mData) + mOffset, bytes);
   mOffset += bytes;
   return NS_OK;
 }
@@ -726,7 +726,7 @@ Http2Compressor::DoOutput(Http2Compressor::outputCode code,
           this, index, pair->mName.get(), pair->mValue.get()));
 
     EncodeInteger(5, index); // 011 3 bit prefix
-    startByte = (unsigned char *)mOutput->BeginWriting() + offset;
+    startByte = reinterpret_cast<unsigned char *>(mOutput->BeginWriting()) + offset;
     *startByte = (*startByte & 0x1f) | 0x60;
         
     if (!index) {
@@ -743,7 +743,7 @@ Http2Compressor::DoOutput(Http2Compressor::outputCode code,
           this, index, pair->mName.get(), pair->mValue.get()));
 
     EncodeInteger(5, index); // 010 3 bit prefix
-    startByte = (unsigned char *)mOutput->BeginWriting() + offset;
+    startByte = reinterpret_cast<unsigned char *>(mOutput->BeginWriting()) + offset;
     *startByte = (*startByte & 0x1f) | 0x40;
         
     if (!index) {
@@ -761,7 +761,7 @@ Http2Compressor::DoOutput(Http2Compressor::outputCode code,
           this, (code == kToggleOff) ? "off" : "on",
           index, pair->mName.get()));
     EncodeInteger(7, index);
-    startByte = (unsigned char *)mOutput->BeginWriting() + offset;
+    startByte = reinterpret_cast<unsigned char *>(mOutput->BeginWriting()) + offset;
     *startByte = *startByte | 0x80; // 1 1 bit prefix  
     break;
     
@@ -782,14 +782,14 @@ Http2Compressor::EncodeInteger(uint32_t prefixLen, uint32_t val)
   if (val < mask) {
     // 1 byte encoding!
     tmp = val;
-    mOutput->Append((char *)&tmp, 1);
+    mOutput->Append(reinterpret_cast<char *>(&tmp), 1);
     return;
   }
 
   if (mask) {
     val -= mask;
     tmp = mask;
-    mOutput->Append((char *)&tmp, 1);
+    mOutput->Append(reinterpret_cast<char *>(&tmp), 1);
   }
   
   uint32_t q, r;
@@ -800,7 +800,7 @@ Http2Compressor::EncodeInteger(uint32_t prefixLen, uint32_t val)
     if (q)
       tmp |= 0x80; // chain bit
     val = q;
-    mOutput->Append((char *)&tmp, 1);
+    mOutput->Append(reinterpret_cast<char *>(&tmp), 1);
   } while (q);
 }
 
