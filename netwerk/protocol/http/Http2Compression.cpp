@@ -305,6 +305,17 @@ Http2Decompressor::OutputHeader(const nsACString &name, const nsACString &value)
     }
   }
 
+  // Look for CR OR LF in value - could be smuggling Sec 10.3
+  // can map to space safely
+  for (const char *cPtr = value.BeginReading();
+       cPtr && cPtr < value.EndReading();
+       ++cPtr) {
+    if (*cPtr == '\r' || *cPtr== '\n') {
+      char *wPtr = const_cast<char *>(cPtr);
+      *wPtr = ' ';
+    }
+  }
+
   // Status comes first
   if (name.Equals(NS_LITERAL_CSTRING(":status"))) {
     nsAutoCString status(NS_LITERAL_CSTRING("HTTP/1.1 "));
