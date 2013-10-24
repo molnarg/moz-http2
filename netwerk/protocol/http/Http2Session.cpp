@@ -1391,7 +1391,7 @@ Http2Session::RecvPushPromise(Http2Session *self)
 
   nsAutoCString key;
   if (!pushedStream->GetHashKey(key)) {
-    LOG3(("Http2Session::RecvPushPromise one of :host :scheme :path missing from push\n"));
+    LOG3(("Http2Session::RecvPushPromise one of :authority :scheme :path missing from push\n"));
     self->CleanupStream(pushedStream, NS_ERROR_FAILURE, PROTOCOL_ERROR);
     self->ResetDownstreamState();
     return NS_OK;

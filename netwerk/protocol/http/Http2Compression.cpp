@@ -312,7 +312,7 @@ Http2Decompressor::OutputHeader(const nsACString &name, const nsACString &value)
     status.Append(NS_LITERAL_CSTRING("\r\n"));
     mOutput->Insert(status, 0);
     mHeaderStatus = value;
-  } else if (name.Equals(NS_LITERAL_CSTRING(":host"))) {
+  } else if (name.Equals(NS_LITERAL_CSTRING(":authority"))) {
     mHeaderHost = value;
   } else if (name.Equals(NS_LITERAL_CSTRING(":scheme"))) {
     mHeaderScheme = value;
@@ -640,7 +640,7 @@ Http2Compressor::EncodeHeaderBlock(const nsCString &nvInput,
   // colon headers first
   ProcessHeader(nvPair(NS_LITERAL_CSTRING(":method"), method));
   ProcessHeader(nvPair(NS_LITERAL_CSTRING(":path"), path));
-  ProcessHeader(nvPair(NS_LITERAL_CSTRING(":host"), host));
+  ProcessHeader(nvPair(NS_LITERAL_CSTRING(":authority"), host));
   ProcessHeader(nvPair(NS_LITERAL_CSTRING(":scheme"), scheme));
 
   // now the non colon headers

@@ -289,7 +289,7 @@ Http2Stream::ParseHttpRequestHeaders(const char *buf,
 
   // check the push cache for GET
   if (mTransaction->RequestHead()->Method() == nsHttp::Get) {
-    // from :scheme, :host, :path
+    // from :scheme, :authority, :path
     nsILoadGroupConnectionInfo *loadGroupCI = mTransaction->LoadGroupConnectionInfo();
     SpdyPushCache *cache = nullptr;
     if (loadGroupCI)
