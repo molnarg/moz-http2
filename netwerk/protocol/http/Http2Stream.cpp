@@ -816,7 +816,7 @@ Http2Stream::ConvertResponseHeaders(Http2Decompressor *decompressor,
   }
 
   aHeadersIn.Truncate();
-  aHeadersOut.Append(NS_LITERAL_CSTRING("X-Firefox-Spdy: Http2/Draft06\r\n\r\n"));
+  aHeadersOut.Append(NS_LITERAL_CSTRING("X-Firefox-Spdy: Http2/Draft07\r\n\r\n"));
   LOG (("decoded response headers are:\n%s", aHeadersOut.BeginReading()));
   return NS_OK;
 }

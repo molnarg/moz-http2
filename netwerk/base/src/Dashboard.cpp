@@ -577,8 +577,8 @@ HttpConnInfo::SetHTTP2ProtocolVersion(uint8_t pv)
     } else if (pv == SPDY_VERSION_31) {
         protocolVersion.Assign(NS_LITERAL_STRING("spdy/3.1"));
     } else {
-        MOZ_ASSERT (pv == HTTP2_VERSION_DRAFT06);
-        protocolVersion.Assign(NS_LITERAL_STRING("HTTP-draft-06/2.0"));
+        MOZ_ASSERT (pv == HTTP2_VERSION_DRAFT07);
+        protocolVersion.Assign(NS_LITERAL_STRING("HTTP-draft-07/2.0"));
     }
 }
 
