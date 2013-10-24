@@ -352,7 +352,7 @@ Http2Stream::ParseHttpRequestHeaders(const char *buf,
 
   // Determine whether to put the fin bit on the header frame or whether
   // to wait for a data packet to put it on.
-  uint8_t lastFrameFlags = 0;
+  uint8_t firstFrameFlags =  Http2Session::kFlag_PRIORITY;
 
   if (mTransaction->RequestHead()->Method() == nsHttp::Get ||
       mTransaction->RequestHead()->Method() == nsHttp::Connect ||
@@ -361,7 +361,7 @@ Http2Stream::ParseHttpRequestHeaders(const char *buf,
     // header packet
 
     SetSentFin(true);
-    lastFrameFlags |= Http2Session::kFlag_END_STREAM;
+    firstFrameFlags |= Http2Session::kFlag_END_STREAM;
   }
   else if (mTransaction->RequestHead()->Method() == nsHttp::Post ||
            mTransaction->RequestHead()->Method() == nsHttp::Put ||
@@ -372,10 +372,8 @@ Http2Stream::ParseHttpRequestHeaders(const char *buf,
     // for other HTTP extension methods, rely on the content-length
     // to determine whether or not to put fin on headers
     SetSentFin(true);
-    lastFrameFlags |= Http2Session::kFlag_END_STREAM;
+    firstFrameFlags |= Http2Session::kFlag_END_STREAM;
   }
-
-  lastFrameFlags |= Http2Session::kFlag_END_HEADERS;
 
   // split this one HEADERS frame up into N HEADERS + CONTINUATION frames if it exceeds the
   // 2^14-1 limit for 1 frame. Do it by inserting header size gaps in the existing
@@ -420,13 +418,13 @@ Http2Stream::ParseHttpRequestHeaders(const char *buf,
     flags = 0;
     frameLen = maxFrameData;
     if (!idx) {
-      flags |= Http2Session::kFlag_PRIORITY;
+      flags |= firstFrameFlags;
       // Only the first frame needs the 4-byte offset
       maxFrameData = Http2Session::kMaxFrameData;
     }
     if (lastFrame) {
       frameLen = dataLength;
-      flags |= lastFrameFlags;
+      flags |= Http2Session::kFlag_END_HEADERS;
     }
     dataLength -= frameLen;
 
