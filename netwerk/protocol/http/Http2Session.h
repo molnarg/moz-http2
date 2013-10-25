@@ -218,6 +218,7 @@ private:
   nsresult    UncompressAndDiscard();
   void        MaybeDecrementConcurrent(Http2Stream *);
   void        GeneratePing(bool);
+  void        GenerateSettingsAck();
   void        GeneratePriority(uint32_t, uint32_t);
   void        GenerateRstStream(uint32_t, uint32_t);
   void        GenerateGoAway(uint32_t);

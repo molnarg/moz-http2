@@ -664,6 +664,22 @@ Http2Session::GeneratePing(bool isAck)
 }
 
 void
+Http2Session::GenerateSettingsAck()
+{
+  // need to generate ack of this settings frame
+  MOZ_ASSERT(PR_GetCurrentThread() == gSocketThread);
+  LOG3(("Http2Session::GenerateSettingsAck %p\n", this));
+
+  EnsureBuffer(mOutputQueueBuffer, mOutputQueueUsed + 8,
+               mOutputQueueUsed, mOutputQueueSize);
+  char *packet = mOutputQueueBuffer.get() + mOutputQueueUsed;
+  mOutputQueueUsed += 8;
+  CreateFrameHeader(packet, 0, FRAME_TYPE_SETTINGS, kFlag_ACK, 0);
+  LogIO(this, nullptr, "Generate Settings ACK", packet, 8);
+  FlushOutputQueue();
+}
+
+void
 Http2Session::GeneratePriority(uint32_t aID, uint32_t aPriority)
 {
   MOZ_ASSERT(PR_GetCurrentThread() == gSocketThread);
@@ -1258,6 +1274,10 @@ Http2Session::RecvSettings(Http2Session *self)
   }
 
   self->ResetDownstreamState();
+
+  if (!(self->mInputFrameFlags & kFlag_ACK))
+    self->GenerateSettingsAck();
+
   return NS_OK;
 }
 
