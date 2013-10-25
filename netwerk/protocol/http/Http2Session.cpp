@@ -595,6 +595,16 @@ Http2Session::CreateFrameHeader(charType dest, uint16_t frameLength,
   memcpy(dest + 4, &streamID, 4);
 }
 
+char *
+Http2Session::EnsureOutputBuffer(uint32_t spaceNeeded)
+{
+  // this is an infallible allocation (if an allocation is
+  // needed, which is probably isn't)
+  EnsureBuffer(mOutputQueueBuffer, mOutputQueueUsed + spaceNeeded,
+               mOutputQueueUsed, mOutputQueueSize);
+  return mOutputQueueBuffer.get() + mOutputQueueUsed;
+}
+
 template void
 Http2Session::CreateFrameHeader(char *dest, uint16_t frameLength,
                                 uint8_t frameType, uint8_t frameFlags,
@@ -646,9 +656,7 @@ Http2Session::GeneratePing(bool isAck)
   MOZ_ASSERT(PR_GetCurrentThread() == gSocketThread);
   LOG3(("Http2Session::GeneratePing %p isAck=%d\n", this, isAck));
 
-  EnsureBuffer(mOutputQueueBuffer, mOutputQueueUsed + 16,
-               mOutputQueueUsed, mOutputQueueSize);
-  char *packet = mOutputQueueBuffer.get() + mOutputQueueUsed;
+  char *packet = EnsureOutputBuffer(16);
   mOutputQueueUsed += 16;
 
   if (isAck) {
@@ -670,9 +678,7 @@ Http2Session::GenerateSettingsAck()
   MOZ_ASSERT(PR_GetCurrentThread() == gSocketThread);
   LOG3(("Http2Session::GenerateSettingsAck %p\n", this));
 
-  EnsureBuffer(mOutputQueueBuffer, mOutputQueueUsed + 8,
-               mOutputQueueUsed, mOutputQueueSize);
-  char *packet = mOutputQueueBuffer.get() + mOutputQueueUsed;
+  char *packet = EnsureOutputBuffer(8);
   mOutputQueueUsed += 8;
   CreateFrameHeader(packet, 0, FRAME_TYPE_SETTINGS, kFlag_ACK, 0);
   LogIO(this, nullptr, "Generate Settings ACK", packet, 8);
@@ -686,9 +692,7 @@ Http2Session::GeneratePriority(uint32_t aID, uint32_t aPriority)
   LOG3(("Http2Session::GeneratePriority %p %X %X\n",
         this, aID, aPriority));
 
-  EnsureBuffer(mOutputQueueBuffer, mOutputQueueUsed + 12,
-               mOutputQueueUsed, mOutputQueueSize);
-  char *packet = mOutputQueueBuffer.get() + mOutputQueueUsed;
+  char *packet = EnsureOutputBuffer(12);
   mOutputQueueUsed += 12;
 
   CreateFrameHeader(packet, 4, FRAME_TYPE_PRIORITY, 0, aID);
@@ -714,9 +718,7 @@ Http2Session::GenerateRstStream(uint32_t aStatusCode, uint32_t aID)
 
   LOG3(("Http2Session::GenerateRst %p 0x%X %d\n", this, aID, aStatusCode));
 
-  EnsureBuffer(mOutputQueueBuffer, mOutputQueueUsed + 12,
-               mOutputQueueUsed, mOutputQueueSize);
-  char *packet = mOutputQueueBuffer.get() + mOutputQueueUsed;
+  char *packet = EnsureOutputBuffer(12);
   mOutputQueueUsed += 12;
   CreateFrameHeader(packet, 4, FRAME_TYPE_RST_STREAM, 0, aID);
 
@@ -733,9 +735,7 @@ Http2Session::GenerateGoAway(uint32_t aStatusCode)
   MOZ_ASSERT(PR_GetCurrentThread() == gSocketThread);
   LOG3(("Http2Session::GenerateGoAway %p code=%X\n", this, aStatusCode));
 
-  EnsureBuffer(mOutputQueueBuffer, mOutputQueueUsed + 16,
-               mOutputQueueUsed, mOutputQueueSize);
-  char *packet = mOutputQueueBuffer.get() + mOutputQueueUsed;
+  char *packet = EnsureOutputBuffer(16);
   mOutputQueueUsed += 16;
 
   memset(packet + 8, 0, 8);
@@ -767,9 +767,7 @@ Http2Session::SendHello()
   // 24 magic, 32 for settings (8 header + 3 settings @8), 12 for window update
   static const uint32_t maxSettings = 3;
   static const uint32_t maxDataLen = 24 + 8 + maxSettings * 8 + 12;
-  EnsureBuffer(mOutputQueueBuffer, mOutputQueueUsed + maxDataLen,
-               mOutputQueueUsed, mOutputQueueSize);
-  char *packet = mOutputQueueBuffer.get() + mOutputQueueUsed;
+  char *packet = EnsureOutputBuffer(maxDataLen);
   memcpy(packet, kMagicHello, 24);
   mOutputQueueUsed += 24;
   LogIO(this, nullptr, "Magic Connection Header", packet, 24);
@@ -2329,8 +2327,7 @@ Http2Session::UpdateLocalRwin(Http2Stream *stream, uint32_t bytes)
 {
   // make sure there is room for 2 window updates even though
   // we may not generate any.
-  EnsureBuffer(mOutputQueueBuffer, mOutputQueueUsed + (16 *2),
-               mOutputQueueUsed, mOutputQueueSize);
+  EnsureOutputBuffer(16 * 2);
 
   UpdateLocalStreamWindow(stream, bytes);
   UpdateLocalSessionWindow(bytes);
@@ -2479,8 +2476,7 @@ Http2Session::CommitToSegmentSize(uint32_t count, bool forceCommitment)
   }
 
   // resize the buffers as needed
-  EnsureBuffer(mOutputQueueBuffer, mOutputQueueUsed + count + kQueueReserved,
-               mOutputQueueUsed, mOutputQueueSize);
+  EnsureOutputBuffer(count + kQueueReserved);
 
   MOZ_ASSERT((mOutputQueueUsed + count) <= (mOutputQueueSize - kQueueReserved),
              "buffer not as large as expected");

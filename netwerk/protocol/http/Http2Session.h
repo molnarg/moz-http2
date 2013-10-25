@@ -158,6 +158,7 @@ public:
   template<typename T>
   static void EnsureBuffer(nsAutoArrayPtr<T> &,
                            uint32_t, uint32_t, uint32_t &);
+  char       *EnsureOutputBuffer(uint32_t needed);
 
   template<typename charType>
   void CreateFrameHeader(charType dest, uint16_t frameLength,
