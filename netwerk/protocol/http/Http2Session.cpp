@@ -1184,8 +1184,14 @@ Http2Session::RecvSettings(Http2Session *self)
   }
 
   uint32_t numEntries = self->mInputFrameDataSize >> 3;
-  LOG3(("Http2Session::RecvSettings %p SETTINGS Control Frame with %d entries",
-        self, numEntries));
+  LOG3(("Http2Session::RecvSettings %p SETTINGS Control Frame "
+        "with %d entries ack=%X", self, numEntries,
+        self->mInputFrameFlags & kFlag_ACK));
+
+  if ((self->mInputFrameFlags & kFlag_ACK) && self->mInputFrameDataSize) {
+    LOG3(("Http2Session::RecvSettings %p ACK with non zero payload is err\n"));
+    ReturnSessionError(self, PROTOCOL_ERROR);
+  }
 
   for (uint32_t index = 0; index < numEntries; ++index) {
     uint8_t *setting = reinterpret_cast<uint8_t *>
