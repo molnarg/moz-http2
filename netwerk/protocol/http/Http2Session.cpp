@@ -748,8 +748,9 @@ Http2Session::SendHello()
   LOG3(("Http2Session::SendHello %p\n", this));
 
   // sized for magic + 2 settings and a session window update to follow
-  // 24 magic, 24 for settings (8 header + 2 settings @8), 12 for window update
-  static const uint32_t maxDataLen = 24 + 8 + 2 * 8 + 12;
+  // 24 magic, 32 for settings (8 header + 3 settings @8), 12 for window update
+  static const uint32_t maxSettings = 3;
+  static const uint32_t maxDataLen = 24 + 8 + maxSettings * 8 + 12;
   EnsureBuffer(mOutputQueueBuffer, mOutputQueueUsed + maxDataLen,
                mOutputQueueUsed, mOutputQueueSize);
   char *packet = mOutputQueueBuffer.get() + mOutputQueueUsed;
@@ -766,10 +767,15 @@ Http2Session::SendHello()
   // entries need to be listed in order by ID
   // 1st entry is bytes 8 to 15
   // 2nd entry is bytes 16 to 23
+  // 3rd entry is bytes 24 to 31
 
   if (!gHttpHandler->AllowPush()) {
-    // announcing that we accept 0 incoming streams is done to
-    // disable server push
+    // If we don't support push then set MAX_CONCURRENT to 0 and also
+    // set ENABLE_PUSH to 0
+    packet[11 + 8 * numberOfEntries] = SETTINGS_TYPE_ENABLE_PUSH;
+    // The value portion of the setting pair is already initialized to 0
+    numberOfEntries++;
+
     packet[11 + 8 * numberOfEntries] = SETTINGS_TYPE_MAX_CONCURRENT;
     // The value portion of the setting pair is already initialized to 0
     numberOfEntries++;
@@ -782,6 +788,7 @@ Http2Session::SendHello()
   memcpy(packet + 12 + 8 * numberOfEntries, &rwin, 4);
   numberOfEntries++;
 
+  MOZ_ASSERT(numberOfEntries <= maxSettings);
   uint32_t dataLen = 8 * numberOfEntries;
   CreateFrameHeader(packet, dataLen, FRAME_TYPE_SETTINGS, 0, 0);
   mOutputQueueUsed += 8 + dataLen;
