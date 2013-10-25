@@ -159,7 +159,6 @@ var options = {
   key: fs.readFileSync(__dirname + '/../moz-spdy/spdy-key.pem'),
   cert: fs.readFileSync(__dirname + '/../moz-spdy/spdy-cert.pem'),
   ca: fs.readFileSync(__dirname + '/../moz-spdy/spdy-ca.pem'),
-  settings: {} // Dafault is to turn off incoming flow control, but this does not work in Firefox!!
   //, log: require('../node-http2/test/util').createLogger('server')
 };
 
