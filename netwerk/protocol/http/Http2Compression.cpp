@@ -18,12 +18,12 @@ nvFIFO::nvFIFO()
   , mTable(nullptr, 128)
 {
 }
-  
+
 nvFIFO::~nvFIFO()
 {
   Clear();
 }
-  
+
 void
 nvFIFO::AddElement(const nsCString &name, const nsCString &value)
 {
@@ -81,7 +81,7 @@ nvFIFO::Length() const
 {
   return mTable.GetSize();
 }
-  
+
 void
 nvFIFO::Clear()
 {
@@ -100,7 +100,7 @@ nvFIFO::operator[] (int32_t index) const
   }
   return static_cast<nvPair *>(mTable.ObjectAt(index));
 }
-  
+
 Http2BaseCompressor::Http2BaseCompressor()
   : mOutput(nullptr)
 {
@@ -115,7 +115,7 @@ Http2BaseCompressor::ClearHeaderTable()
 }
 
 void
-Http2BaseCompressor::UpdateReferenceSet(int32_t delta) 
+Http2BaseCompressor::UpdateReferenceSet(int32_t delta)
 {
   if (!delta)
     return;
@@ -225,7 +225,7 @@ Http2Decompressor::DecodeHeaderBlock(const uint8_t *data, uint32_t datalen,
       OutputHeader(mReferenceSet[index]);
     }
   }
-  
+
   mAlternateReferenceSet.Clear();
   return rv;
 }
@@ -259,7 +259,7 @@ Http2Decompressor::DecodeInteger(uint32_t prefixLen, uint32_t &accum)
 
   ++mOffset;
   factor = factor * 128;
-  
+
   while (chainBit) {
     // really big offsets are just trawling for overflows
     if (accum >= 0x800000)
@@ -383,7 +383,7 @@ Http2Decompressor::DoIndexed()
 {
   // this starts with a 1 bit pattern
   MOZ_ASSERT(mData[mOffset] & 0x80);
-  
+
   // Indexed entries toggle the reference set
   // This is a 7 bit prefix
 
@@ -486,7 +486,7 @@ Http2Decompressor::DoLiteralWithIncremental()
           room, name.get()));
     return NS_OK;
   }
-  
+
   // make room in the header table
   uint32_t removedCount = 0;
   while (mHeaderTable.Length() && ((mHeaderTable.ByteCount() + room) > kMaxBuffer)) { // 3.2.4
@@ -566,7 +566,7 @@ Http2Decompressor::DoLiteralWithSubstitution()
   }
 
   uint32_t oldSize = mHeaderTable[substitutionIndex]->Size();
-  
+
   // make room in the header table
   uint32_t removedCount = 0;
   while (mHeaderTable.Length() && ((mHeaderTable.ByteCount() + newSize - oldSize) > kMaxBuffer)) { // 3.2.4
@@ -578,7 +578,7 @@ Http2Decompressor::DoLiteralWithSubstitution()
 
   // adjust references to header table
   UpdateReferenceSet(-1 * removedCount);
-  
+
   if (removedCount > substitutionIndex) {
     substitutionIndex = 0;
     mHeaderTable.AddElement0(name, value);
@@ -699,7 +699,7 @@ Http2Compressor::EncodeHeaderBlock(const nsCString &nvInput,
     // as we don't have a good mechanism for clients to make use of it
     // anyhow
     if (name.Equals("expect")) {
-      const char *continueHeader = 
+      const char *continueHeader =
         nsHttp::FindToken(beginBuffer + valueIndex, "100-continue",
                           HTTP_HEADER_VALUE_SEPS);
       if (continueHeader) {
@@ -714,13 +714,13 @@ Http2Compressor::EncodeHeaderBlock(const nsCString &nvInput,
         }
       }
     }
-    
+
     while (valueIndex < crlfIndex && beginBuffer[valueIndex] == ' ')
       ++valueIndex;
 
     nsDependentCSubstring value = Substring(beginBuffer + valueIndex,
                                             beginBuffer + crlfIndex);
-    
+
     if (name.Equals("content-length")) {
       int64_t len;
       nsCString tmp(value);
@@ -766,12 +766,12 @@ Http2Compressor::DoOutput(Http2Compressor::outputCode code,
     EncodeInteger(5, index); // 011 3 bit prefix
     startByte = reinterpret_cast<unsigned char *>(mOutput->BeginWriting()) + offset;
     *startByte = (*startByte & 0x1f) | 0x60;
-        
+
     if (!index) {
       EncodeInteger(0, pair->mName.Length());
       mOutput->Append(pair->mName);
     }
-    
+
     EncodeInteger(0, pair->mValue.Length());
     mOutput->Append(pair->mValue);
     break;
@@ -783,12 +783,12 @@ Http2Compressor::DoOutput(Http2Compressor::outputCode code,
     EncodeInteger(5, index); // 010 3 bit prefix
     startByte = reinterpret_cast<unsigned char *>(mOutput->BeginWriting()) + offset;
     *startByte = (*startByte & 0x1f) | 0x40;
-        
+
     if (!index) {
       EncodeInteger(0, pair->mName.Length());
       mOutput->Append(pair->mName);
     }
-    
+
     EncodeInteger(0, pair->mValue.Length());
     mOutput->Append(pair->mValue);
     break;
@@ -800,9 +800,9 @@ Http2Compressor::DoOutput(Http2Compressor::outputCode code,
           index, pair->mName.get()));
     EncodeInteger(7, index);
     startByte = reinterpret_cast<unsigned char *>(mOutput->BeginWriting()) + offset;
-    *startByte = *startByte | 0x80; // 1 1 bit prefix  
+    *startByte = *startByte | 0x80; // 1 1 bit prefix
     break;
-    
+
   case kNop:
     LOG3(("HTTP compressor %p implied in reference set index %u %s\n",
           this, index, pair->mName.get()));
@@ -829,7 +829,7 @@ Http2Compressor::EncodeInteger(uint32_t prefixLen, uint32_t val)
     tmp = mask;
     mOutput->Append(reinterpret_cast<char *>(&tmp), 1);
   }
-  
+
   uint32_t q, r;
   do {
     q = val / 128;
@@ -909,7 +909,7 @@ Http2Compressor::ProcessHeader(const nvPair inputPair)
   uint32_t matchedIndex;
   uint32_t nameReference = 0;
   bool match = false;
-  
+
   for (uint32_t index = 0; index < headerTableSize; ++index) {
     if (mHeaderTable[index]->mName.Equals(inputPair.mName)) {
       nameReference = index + 1;

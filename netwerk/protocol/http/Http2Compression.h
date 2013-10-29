@@ -7,7 +7,7 @@
 #define mozilla_net_Http2Compression_Internal_h
 
 // HPACK
-// tools.ietf.org/html/draft-ietf-httpbis-header-compression-02 
+// tools.ietf.org/html/draft-ietf-httpbis-header-compression-02
 
 #include "mozilla/Attributes.h"
 #include "nsDeque.h"
@@ -44,7 +44,7 @@ public:
   uint32_t Length() const;
   void Clear();
   const nvPair *operator[] (int32_t index) const;
-  
+
 private:
   uint32_t mByteCount;
   nsDeque  mTable;
@@ -55,14 +55,14 @@ class Http2BaseCompressor
 public:
   Http2BaseCompressor();
   virtual ~Http2BaseCompressor() { };
-  
+
 protected:
   // this will become a HTTP/2 SETTINGS value in a future draft
   const static uint32_t kMaxBuffer = 4096;
 
   virtual void ClearHeaderTable();
   virtual void UpdateReferenceSet(int32_t delta);
- 
+
   nsAutoTArray<uint32_t, 64> mReferenceSet; // list of indicies
 
   // the alternate set is used to track the emitted headers when
@@ -99,7 +99,7 @@ public:
   void GetScheme(nsACString &hdr) { hdr = mHeaderScheme; }
   void GetPath(nsACString &hdr) { hdr = mHeaderPath; }
   void GetMethod(nsACString &hdr) { hdr = mHeaderMethod; }
-  
+
 
 private:
   nsresult DoIndexed();
@@ -171,4 +171,3 @@ private:
 } // namespace mozilla
 
 #endif // mozilla_net_Http2Compression_Internal_h
-
