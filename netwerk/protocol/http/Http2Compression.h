@@ -105,7 +105,6 @@ private:
   nsresult DoIndexed();
   nsresult DoLiteralWithoutIndex();
   nsresult DoLiteralWithIncremental();
-  nsresult DoLiteralWithSubstitution();
   nsresult DoLiteralInternal(nsACString &, nsACString &);
 
   nsresult DecodeInteger(uint32_t prefixLen, uint32_t &result);

@@ -203,8 +203,6 @@ Http2Decompressor::DecodeHeaderBlock(const uint8_t *data, uint32_t datalen,
     if (mData[mOffset] & 0x80) {
       rv = DoIndexed();
     } else if (!(mData[mOffset] & 0x40)) {
-      rv = DoLiteralWithSubstitution();
-    } else if (mData[mOffset] & 0x20) {
       rv = DoLiteralWithoutIndex();
     } else {
       rv = DoLiteralWithIncremental();
@@ -508,93 +506,6 @@ Http2Decompressor::DoLiteralWithIncremental()
   LOG3(("HTTP decompressor literal with index %u %s %s\n",
         index, name.get(), value.get()));
 
-  return NS_OK;
-}
-
-nsresult
-Http2Decompressor::DoLiteralWithSubstitution()
-{
-  // this starts with 00 bit pattern
-  MOZ_ASSERT((mData[mOffset] & 0xC0) == 0x00);
-
-  nsAutoCString name, value;
-  uint32_t index, substitutionIndex;
-
-  // first let's get the name
-  nsresult rv = DecodeInteger(6, index);
-  if (NS_FAILED(rv))
-    return rv;
-
-  if (!index) {
-    // name is embedded as a literal
-    uint32_t nameLen;
-    rv = DecodeInteger(0, nameLen);
-    if (NS_SUCCEEDED(rv))
-      rv = CopyStringFromInput(nameLen, name);
-  } else {
-    // name is from headertable
-    rv = CopyHeaderString(index - 1, name);
-  }
-
-  if (NS_FAILED(rv))
-    return rv;
-
-  // now the substitution index
-  rv = DecodeInteger(0, substitutionIndex);
-  if (NS_FAILED(rv))
-    return rv;
-
-  // now the value
-  uint32_t valueLen;
-  rv = DecodeInteger(0, valueLen);
-  if (NS_SUCCEEDED(rv))
-    rv = CopyStringFromInput(valueLen, value);
-
-  if (NS_FAILED(rv))
-    return rv;
-
-  rv = OutputHeader(name, value);
-  if (NS_FAILED(rv))
-    return rv;
-
-  uint32_t newSize = nvPair(name, value).Size();
-  if (newSize > kMaxBuffer) { // 3.2.4
-    ClearHeaderTable();
-    LOG3(("HTTP decompressor substitution size %u caused clear header table %s\n",
-          newSize, name.get()));
-    return NS_OK;
-  }
-
-  uint32_t oldSize = mHeaderTable[substitutionIndex]->Size();
-
-  // make room in the header table
-  uint32_t removedCount = 0;
-  while (mHeaderTable.Length() && ((mHeaderTable.ByteCount() + newSize - oldSize) > kMaxBuffer)) { // 3.2.4
-    mHeaderTable.RemoveElement();
-    if (removedCount == substitutionIndex)
-      oldSize = 0;
-    ++removedCount;
-  }
-
-  // adjust references to header table
-  UpdateReferenceSet(-1 * removedCount);
-
-  if (removedCount > substitutionIndex) {
-    substitutionIndex = 0;
-    mHeaderTable.AddElement0(name, value);
-    UpdateReferenceSet(+1);
-  } else {
-    substitutionIndex -= removedCount;
-    mHeaderTable.ChangeElement(substitutionIndex, name, value);
-  }
-
-  if (!mReferenceSet.Contains(substitutionIndex))
-    mReferenceSet.AppendElement(substitutionIndex);
-  if (!mAlternateReferenceSet.Contains(substitutionIndex))
-    mAlternateReferenceSet.AppendElement(substitutionIndex);
-
-  LOG3(("HTTP decompressor substitution with index %u %s %s\n",
-        substitutionIndex, name.get(), value.get()));
   return NS_OK;
 }
 
