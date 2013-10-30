@@ -61,6 +61,7 @@ protected:
 
   virtual void ClearHeaderTable();
   virtual void UpdateReferenceSet(int32_t delta);
+  virtual void IncrementReferenceSetIndices();
 
   nsAutoTArray<uint32_t, 64> mReferenceSet; // list of indicies
 

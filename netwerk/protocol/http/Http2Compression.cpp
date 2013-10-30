@@ -195,7 +195,7 @@ Http2BaseCompressor::UpdateReferenceSet(int32_t delta)
   uint32_t oldHeaderTableSize = headerTableSize + delta;
 
   for (int32_t i = mReferenceSet.Length() - 1; i >= 0; --i) {
-    int32_t indexRef = static_cast<int32_t>(mReferenceSet[i]);
+    uint32_t indexRef = mReferenceSet[i];
     if (indexRef >= headerTableSize) {
       if (indexRef < oldHeaderTableSize) {
         // This one got dropped
@@ -204,7 +204,7 @@ Http2BaseCompressor::UpdateReferenceSet(int32_t delta)
         mReferenceSet.RemoveElementAt(i);
       } else {
         // This pointed to the static table, need to adjust
-        int32_t newRef = indexRef - delta;
+        uint32_t newRef = indexRef - delta;
         LOG3(("HTTP base compressor reference to index %u changed to %d (%s)\n",
               mReferenceSet[i], newRef, mHeaderTable[newRef]->mName.get()));
         mReferenceSet[i] = newRef;
@@ -213,7 +213,7 @@ Http2BaseCompressor::UpdateReferenceSet(int32_t delta)
   }
 
   for (int32_t i = mAlternateReferenceSet.Length() - 1; i >= 0; --i) {
-    int32_t indexRef = static_cast<int32_t>(mAlternateReferenceSet[i]);
+    uint32_t indexRef = mAlternateReferenceSet[i];
     if (indexRef >= headerTableSize) {
       if (indexRef < oldHeaderTableSize) {
         // This one got dropped
@@ -222,12 +222,24 @@ Http2BaseCompressor::UpdateReferenceSet(int32_t delta)
         mAlternateReferenceSet.RemoveElementAt(i);
       } else {
         // This pointed to the static table, need to adjust
-        int32_t newRef = indexRef - delta;
+        uint32_t newRef = indexRef - delta;
         LOG3(("HTTP base compressor new reference to index %u changed to %d (%s)\n",
               mAlternateReferenceSet[i], newRef, mHeaderTable[newRef]->mName.get()));
         mAlternateReferenceSet[i] = newRef;
       }
     }
+  }
+}
+
+void
+Http2BaseCompressor::IncrementReferenceSetIndices()
+{
+  for (int32_t i = mReferenceSet.Length() - 1; i >= 0; --i) {
+    mReferenceSet[i] = mReferenceSet[i] + 1;
+  }
+
+  for (int32_t i = mAlternateReferenceSet.Length() - 1; i >= 0; --i) {
+    mAlternateReferenceSet[i] = mAlternateReferenceSet[i] + 1;
   }
 }
 
@@ -554,8 +566,9 @@ Http2Decompressor::DoLiteralWithIncremental()
   // Incremental Indexing implicitly adds a row to the header table.
   // It also adds the new row to the Reference Set
   mHeaderTable.AddElement(name, value);
-  mReferenceSet.AppendElement(index);
-  mAlternateReferenceSet.AppendElement(index);
+  IncrementReferenceSetIndices();
+  mReferenceSet.AppendElement(0);
+  mAlternateReferenceSet.AppendElement(0);
 
   LOG3(("HTTP decompressor literal with index 0 %s %s\n",
         name.get(), value.get()));
@@ -797,7 +810,7 @@ Http2Compressor::UpdateReferenceSet(int32_t delta)
   uint32_t oldHeaderTableSize = headerTableSize + delta;
 
   for (int32_t i = mImpliedReferenceSet.Length() - 1; i >= 0; --i) {
-    int32_t indexRef = static_cast<int32_t>(mImpliedReferenceSet[i]);
+    uint32_t indexRef = mImpliedReferenceSet[i];
     if (indexRef >= headerTableSize) {
       if (indexRef < oldHeaderTableSize) {
         // This one got dropped
@@ -806,12 +819,22 @@ Http2Compressor::UpdateReferenceSet(int32_t delta)
         mImpliedReferenceSet.RemoveElementAt(i);
       } else {
         // This pointed to the static table, need to adjust
-        int32_t newRef = indexRef - delta;
+        uint32_t newRef = indexRef - delta;
         LOG3(("HTTP compressor implied reference to index %u changed to %d (%s)\n",
               mImpliedReferenceSet[i], newRef, mHeaderTable[newRef]->mName.get()));
         mImpliedReferenceSet[i] = newRef;
       }
     }
+  }
+}
+
+void
+Http2Compressor::IncrementReferenceSetIndices()
+{
+  Http2BaseCompressor::IncrementReferenceSetIndices();
+
+  for (int32_t i = mImpliedReferenceSet.Length() - 1; i >= 0; --i) {
+    mImpliedReferenceSet[i] = mImpliedReferenceSet[i] + 1;
   }
 }
 
@@ -878,6 +901,7 @@ Http2Compressor::ProcessHeader(const nvPair inputPair)
     DoOutput(kIndexedLiteral, &inputPair, nameReference);
 
     mHeaderTable.AddElement(inputPair.mName, inputPair.mValue);
+    IncrementReferenceSetIndices();
     LOG3(("HTTP compressor %p new literal placed at index 0\n",
           this));
     mAlternateReferenceSet.AppendElement(0);
