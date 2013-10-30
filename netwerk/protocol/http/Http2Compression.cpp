@@ -144,6 +144,12 @@ nvFIFO::Length() const
   return mTable.GetSize() + kStaticHeaders.GetSize();
 }
 
+uint32_t
+nvFIFO::VariableLength() const
+{
+  return mTable.GetSize();
+}
+
 void
 nvFIFO::Clear()
 {
@@ -185,29 +191,42 @@ Http2BaseCompressor::UpdateReferenceSet(int32_t delta)
   if (!delta)
     return;
 
+  uint32_t headerTableSize = mHeaderTable.VariableLength();
+  uint32_t oldHeaderTableSize = headerTableSize + delta;
+
   for (int32_t i = mReferenceSet.Length() - 1; i >= 0; --i) {
-    if ((static_cast<int32_t>(mReferenceSet[i]) + delta) < 0) {
-      LOG3(("HTTP base compressor reference to index %u removed.\n",
-            mReferenceSet[i]));
-      mReferenceSet.RemoveElementAt(i);
-    } else {
-      LOG3(("HTTP base compressor reference to index %u changed to %d (%s)\n",
-            mReferenceSet[i], mReferenceSet[i] + delta,
-            mHeaderTable[mReferenceSet[i] + delta]->mName.get()));
-      mReferenceSet[i] = mReferenceSet[i] + delta;
+    int32_t indexRef = static_cast<int32_t>(mReferenceSet[i]);
+    if (indexRef >= headerTableSize) {
+      if (indexRef < oldHeaderTableSize) {
+        // This one got dropped
+        LOG3(("HTTP base compressor reference to index %u removed.\n",
+              indexRef));
+        mReferenceSet.RemoveElementAt(i);
+      } else {
+        // This pointed to the static table, need to adjust
+        int32_t newRef = indexRef - delta;
+        LOG3(("HTTP base compressor reference to index %u changed to %d (%s)\n",
+              mReferenceSet[i], newRef, mHeaderTable[newRef]->mName.get()));
+        mReferenceSet[i] = newRef;
+      }
     }
   }
 
   for (int32_t i = mAlternateReferenceSet.Length() - 1; i >= 0; --i) {
-    if ((static_cast<int32_t>(mAlternateReferenceSet[i]) + delta) < 0) {
-      LOG3(("HTTP base compressor new reference to index %u removed.\n",
-            mAlternateReferenceSet[i]));
-      mAlternateReferenceSet.RemoveElementAt(i);
-    } else {
-      LOG3(("HTTP base compressor new reference to index %u changed to %d (%s)\n",
-            mAlternateReferenceSet[i], mAlternateReferenceSet[i] + delta,
-            mHeaderTable[mAlternateReferenceSet[i] + delta]->mName.get()));
-      mAlternateReferenceSet[i] = mAlternateReferenceSet[i] + delta;
+    int32_t indexRef = static_cast<int32_t>(mAlternateReferenceSet[i]);
+    if (indexRef >= headerTableSize) {
+      if (indexRef < oldHeaderTableSize) {
+        // This one got dropped
+        LOG3(("HTTP base compressor new reference to index %u removed.\n",
+              indexRef));
+        mAlternateReferenceSet.RemoveElementAt(i);
+      } else {
+        // This pointed to the static table, need to adjust
+        int32_t newRef = indexRef - delta;
+        LOG3(("HTTP base compressor new reference to index %u changed to %d (%s)\n",
+              mAlternateReferenceSet[i], newRef, mHeaderTable[newRef]->mName.get()));
+        mAlternateReferenceSet[i] = newRef;
+      }
     }
   }
 }
@@ -521,24 +540,25 @@ Http2Decompressor::DoLiteralWithIncremental()
 
   // make room in the header table
   uint32_t removedCount = 0;
-  while (mHeaderTable.Length() && ((mHeaderTable.ByteCount() + room) > kMaxBuffer)) { // 3.2.4
+  while (mHeaderTable.VariableLength() && ((mHeaderTable.ByteCount() + room) > kMaxBuffer)) { // 3.2.4
+    uint32_t index = mHeaderTable.VariableLength() - 1;
     mHeaderTable.RemoveElement();
     ++removedCount;
-    LOG3(("HTTP decompressor header table index 0 %s removed for size.\n", name.get()));
+    LOG3(("HTTP decompressor header table index %u %s removed for size.\n",
+          index, name.get()));
   }
 
   // adjust references to header table
-  UpdateReferenceSet(-1 * removedCount);
+  UpdateReferenceSet(removedCount);
 
   // Incremental Indexing implicitly adds a row to the header table.
   // It also adds the new row to the Reference Set
-  uint32_t index = mHeaderTable.Length();
   mHeaderTable.AddElement(name, value);
   mReferenceSet.AppendElement(index);
   mAlternateReferenceSet.AppendElement(index);
 
-  LOG3(("HTTP decompressor literal with index %u %s %s\n",
-        index, name.get(), value.get()));
+  LOG3(("HTTP decompressor literal with index 0 %s %s\n",
+        name.get(), value.get()));
 
   return NS_OK;
 }
@@ -773,16 +793,24 @@ Http2Compressor::UpdateReferenceSet(int32_t delta)
 
   Http2BaseCompressor::UpdateReferenceSet(delta);
 
+  uint32_t headerTableSize = mHeaderTable.VariableLength();
+  uint32_t oldHeaderTableSize = headerTableSize + delta;
+
   for (int32_t i = mImpliedReferenceSet.Length() - 1; i >= 0; --i) {
-    if ((static_cast<int32_t>(mImpliedReferenceSet[i]) + delta) < 0) {
-      LOG3(("HTTP base compressor implied reference to index %u removed.\n",
-            mImpliedReferenceSet[i]));
-      mImpliedReferenceSet.RemoveElementAt(i);
-    } else {
-      LOG3(("HTTP base compressor implied reference to index %u changed to %d (%s)\n",
-            mImpliedReferenceSet[i], mImpliedReferenceSet[i] + delta,
-            mHeaderTable[mImpliedReferenceSet[i] + delta]->mName.get()));
-      mImpliedReferenceSet[i] = mImpliedReferenceSet[i] + delta;
+    int32_t indexRef = static_cast<int32_t>(mImpliedReferenceSet[i]);
+    if (indexRef >= headerTableSize) {
+      if (indexRef < oldHeaderTableSize) {
+        // This one got dropped
+        LOG3(("HTTP compressor implied reference to index %u removed.\n",
+              indexRef));
+        mImpliedReferenceSet.RemoveElementAt(i);
+      } else {
+        // This pointed to the static table, need to adjust
+        int32_t newRef = indexRef - delta;
+        LOG3(("HTTP compressor implied reference to index %u changed to %d (%s)\n",
+              mImpliedReferenceSet[i], newRef, mHeaderTable[newRef]->mName.get()));
+        mImpliedReferenceSet[i] = newRef;
+      }
     }
   }
 }
@@ -792,28 +820,29 @@ Http2Compressor::MakeRoom(uint32_t amount)
 {
   // make room in the header table
   uint32_t removedCount = 0;
-  while (mHeaderTable.Length() && ((mHeaderTable.ByteCount() + amount) > kMaxBuffer)) { // 3.2.4
+  while (mHeaderTable.VariableLength() && ((mHeaderTable.ByteCount() + amount) > kMaxBuffer)) { // 3.2.4
 
     // if there is a reference to removedCount (~0) in the implied reference set we need,
     // to toggle it off/on so that the implied reference is not lost when the
     // table is trimmed
-    if (mImpliedReferenceSet.Contains(removedCount) ) {
+    uint32_t index = mHeaderTable.VariableLength() - 1;
+    if (mImpliedReferenceSet.Contains(index) ) {
       LOG3(("HTTP compressor header table index %u %s about to be "
             "removed for size but has an implied reference. Will Toggle.\n",
-            removedCount, mHeaderTable[0]->mName.get()));
+            index, mHeaderTable[index]->mName.get()));
 
-      DoOutput(kToggleOff, mHeaderTable[0], removedCount);
-      DoOutput(kToggleOn, mHeaderTable[0], removedCount);
+      DoOutput(kToggleOff, mHeaderTable[index], removedCount);
+      DoOutput(kToggleOn, mHeaderTable[index], removedCount);
     }
 
-    LOG3(("HTTP compressor header table index %u [really 0] %s removed for size.\n",
-          removedCount, mHeaderTable[0]->mName.get()));
+    LOG3(("HTTP compressor header table index %u %s removed for size.\n",
+          index, mHeaderTable[index]->mName.get()));
     mHeaderTable.RemoveElement();
     ++removedCount;
   }
 
   // adjust references to header table
-  UpdateReferenceSet(-1 * removedCount);
+  UpdateReferenceSet(removedCount);
 }
 
 void
@@ -848,12 +877,10 @@ Http2Compressor::ProcessHeader(const nvPair inputPair)
     MakeRoom(newSize);
     DoOutput(kIndexedLiteral, &inputPair, nameReference);
 
-    // MakeRoom() may have changed header table length. recheck it.
-    headerTableSize = mHeaderTable.Length();
     mHeaderTable.AddElement(inputPair.mName, inputPair.mValue);
-    LOG3(("HTTP compressor %p new literal placed at index %u\n",
-          this, headerTableSize));
-    mAlternateReferenceSet.AppendElement(headerTableSize);
+    LOG3(("HTTP compressor %p new literal placed at index 0\n",
+          this));
+    mAlternateReferenceSet.AppendElement(0);
     return;
   }
 

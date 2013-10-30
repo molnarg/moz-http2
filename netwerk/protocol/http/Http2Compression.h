@@ -40,6 +40,7 @@ public:
   void RemoveElement();
   uint32_t ByteCount() const;
   uint32_t Length() const;
+  uint32_t VariableLength() const;
   void Clear();
   const nvPair *operator[] (int32_t index) const;
 
