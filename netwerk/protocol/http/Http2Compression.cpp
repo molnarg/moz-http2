@@ -423,7 +423,7 @@ Http2Decompressor::DoLiteralInternal(nsACString &name, nsACString &value)
   if (!index) {
     // name is embedded as a literal
     uint32_t nameLen;
-    rv = DecodeInteger(0, nameLen);
+    rv = DecodeInteger(8, nameLen);
     if (NS_SUCCEEDED(rv))
       rv = CopyStringFromInput(nameLen, name);
   } else {
@@ -435,7 +435,7 @@ Http2Decompressor::DoLiteralInternal(nsACString &name, nsACString &value)
 
   // now the value
   uint32_t valueLen;
-  rv = DecodeInteger(0, valueLen);
+  rv = DecodeInteger(8, valueLen);
   if (NS_SUCCEEDED(rv))
     rv = CopyStringFromInput(valueLen, value);
   if (NS_FAILED(rv))
@@ -679,11 +679,11 @@ Http2Compressor::DoOutput(Http2Compressor::outputCode code,
     *startByte = (*startByte & 0x1f) | 0x60;
 
     if (!index) {
-      EncodeInteger(0, pair->mName.Length());
+      EncodeInteger(8, pair->mName.Length());
       mOutput->Append(pair->mName);
     }
 
-    EncodeInteger(0, pair->mValue.Length());
+    EncodeInteger(8, pair->mValue.Length());
     mOutput->Append(pair->mValue);
     break;
 
@@ -696,11 +696,11 @@ Http2Compressor::DoOutput(Http2Compressor::outputCode code,
     *startByte = (*startByte & 0x1f) | 0x40;
 
     if (!index) {
-      EncodeInteger(0, pair->mName.Length());
+      EncodeInteger(8, pair->mName.Length());
       mOutput->Append(pair->mName);
     }
 
-    EncodeInteger(0, pair->mValue.Length());
+    EncodeInteger(8, pair->mValue.Length());
     mOutput->Append(pair->mValue);
     break;
 
