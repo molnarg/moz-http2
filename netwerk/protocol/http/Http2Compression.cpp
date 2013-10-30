@@ -29,7 +29,7 @@ nvFIFO::AddElement(const nsCString &name, const nsCString &value)
 {
   mByteCount += name.Length() + value.Length() + 32;
   nvPair *pair = new nvPair(name, value);
-  mTable.Push(pair);
+  mTable.PushFront(pair);
 }
 
 void
@@ -41,7 +41,7 @@ nvFIFO::AddElement(const nsCString &name)
 void
 nvFIFO::RemoveElement()
 {
-  nvPair *pair = static_cast<nvPair *>(mTable.PopFront());
+  nvPair *pair = static_cast<nvPair *>(mTable.Pop());
   if (pair) {
     mByteCount -= pair->Size();
     delete pair;
