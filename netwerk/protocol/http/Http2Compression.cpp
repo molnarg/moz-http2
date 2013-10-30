@@ -141,7 +141,7 @@ nvFIFO::ByteCount() const
 uint32_t
 nvFIFO::Length() const
 {
-  return mTable.GetSize();
+  return mTable.GetSize() + kStaticHeaders.GetSize();
 }
 
 void
