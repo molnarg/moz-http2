@@ -48,28 +48,6 @@ nvFIFO::RemoveElement()
   }
 }
 
-void
-nvFIFO::AddElement0(const nsCString &name, const nsCString &value)
-{
-  mByteCount += name.Length() + value.Length() + 32;
-  nvPair *pair = new nvPair(name, value);
-  mTable.PushFront(pair);
-}
-
-void
-nvFIFO::ChangeElement(int index, const nsCString &name,
-                      const nsCString &value)
-{
-  nvPair *newpair = new nvPair(name, value);
-  nvPair *oldpair = static_cast<nvPair *>(mTable.ObjectAt(index));
-
-  mByteCount -= oldpair->Size();
-  mByteCount += newpair->Size();
-
-  mTable.SetObjectAt(index, newpair);
-  delete oldpair;
-}
-
 uint32_t
 nvFIFO::ByteCount() const
 {

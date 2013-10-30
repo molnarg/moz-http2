@@ -38,8 +38,6 @@ public:
   void AddElement(const nsCString &name, const nsCString &value);
   void AddElement(const nsCString &name);
   void RemoveElement();
-  void AddElement0(const nsCString &name, const nsCString &value);
-  void ChangeElement(int index, const nsCString &name, const nsCString &value);
   uint32_t ByteCount() const;
   uint32_t Length() const;
   void Clear();
