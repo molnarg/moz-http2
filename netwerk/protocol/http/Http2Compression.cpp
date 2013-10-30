@@ -13,10 +13,94 @@
 namespace mozilla {
 namespace net {
 
+static nsDeque kStaticHeaders;
+
+static void
+AddStaticElement(const nsCString &name, const nsCString &value)
+{
+  nvPair *pair = new nvPair(name, value);
+  kStaticHeaders.Push(pair);
+}
+
+static void
+AddStaticElement(const nsCString &name)
+{
+  AddStaticElement(name, EmptyCString());
+}
+
+static void
+InitializeStaticHeaders()
+{
+  static bool initialized = false;
+  if (!initialized) {
+    initialized = true;
+    AddStaticElement(NS_LITERAL_CSTRING(":authority"));
+    AddStaticElement(NS_LITERAL_CSTRING(":method"), NS_LITERAL_CSTRING("GET"));
+    AddStaticElement(NS_LITERAL_CSTRING(":method"), NS_LITERAL_CSTRING("POST"));
+    AddStaticElement(NS_LITERAL_CSTRING(":path"), NS_LITERAL_CSTRING("/"));
+    AddStaticElement(NS_LITERAL_CSTRING(":path"), NS_LITERAL_CSTRING("/index.html"));
+    AddStaticElement(NS_LITERAL_CSTRING(":scheme"), NS_LITERAL_CSTRING("http"));
+    AddStaticElement(NS_LITERAL_CSTRING(":scheme"), NS_LITERAL_CSTRING("https"));
+    AddStaticElement(NS_LITERAL_CSTRING(":status"), NS_LITERAL_CSTRING("200"));
+    AddStaticElement(NS_LITERAL_CSTRING(":status"), NS_LITERAL_CSTRING("500"));
+    AddStaticElement(NS_LITERAL_CSTRING(":status"), NS_LITERAL_CSTRING("404"));
+    AddStaticElement(NS_LITERAL_CSTRING(":status"), NS_LITERAL_CSTRING("403"));
+    AddStaticElement(NS_LITERAL_CSTRING(":status"), NS_LITERAL_CSTRING("400"));
+    AddStaticElement(NS_LITERAL_CSTRING(":status"), NS_LITERAL_CSTRING("401"));
+    AddStaticElement(NS_LITERAL_CSTRING("accept-charset"));
+    AddStaticElement(NS_LITERAL_CSTRING("accept-encoding"));
+    AddStaticElement(NS_LITERAL_CSTRING("accept-language"));
+    AddStaticElement(NS_LITERAL_CSTRING("accept-ranges"));
+    AddStaticElement(NS_LITERAL_CSTRING("accept"));
+    AddStaticElement(NS_LITERAL_CSTRING("access-control-allow-origin"));
+    AddStaticElement(NS_LITERAL_CSTRING("age"));
+    AddStaticElement(NS_LITERAL_CSTRING("allow"));
+    AddStaticElement(NS_LITERAL_CSTRING("authorization"));
+    AddStaticElement(NS_LITERAL_CSTRING("cache-control"));
+    AddStaticElement(NS_LITERAL_CSTRING("content-disposition"));
+    AddStaticElement(NS_LITERAL_CSTRING("content-encoding"));
+    AddStaticElement(NS_LITERAL_CSTRING("content-language"));
+    AddStaticElement(NS_LITERAL_CSTRING("content-length"));
+    AddStaticElement(NS_LITERAL_CSTRING("content-location"));
+    AddStaticElement(NS_LITERAL_CSTRING("content-range"));
+    AddStaticElement(NS_LITERAL_CSTRING("content-type"));
+    AddStaticElement(NS_LITERAL_CSTRING("cookie"));
+    AddStaticElement(NS_LITERAL_CSTRING("date"));
+    AddStaticElement(NS_LITERAL_CSTRING("etag"));
+    AddStaticElement(NS_LITERAL_CSTRING("expect"));
+    AddStaticElement(NS_LITERAL_CSTRING("expires"));
+    AddStaticElement(NS_LITERAL_CSTRING("from"));
+    AddStaticElement(NS_LITERAL_CSTRING("if-match"));
+    AddStaticElement(NS_LITERAL_CSTRING("if-modified-since"));
+    AddStaticElement(NS_LITERAL_CSTRING("if-none-match"));
+    AddStaticElement(NS_LITERAL_CSTRING("if-range"));
+    AddStaticElement(NS_LITERAL_CSTRING("if-unmodified-since"));
+    AddStaticElement(NS_LITERAL_CSTRING("last-modified"));
+    AddStaticElement(NS_LITERAL_CSTRING("link"));
+    AddStaticElement(NS_LITERAL_CSTRING("location"));
+    AddStaticElement(NS_LITERAL_CSTRING("max-forwards"));
+    AddStaticElement(NS_LITERAL_CSTRING("proxy-authenticate"));
+    AddStaticElement(NS_LITERAL_CSTRING("proxy-authorization"));
+    AddStaticElement(NS_LITERAL_CSTRING("range"));
+    AddStaticElement(NS_LITERAL_CSTRING("referer"));
+    AddStaticElement(NS_LITERAL_CSTRING("refresh"));
+    AddStaticElement(NS_LITERAL_CSTRING("retry-after"));
+    AddStaticElement(NS_LITERAL_CSTRING("server"));
+    AddStaticElement(NS_LITERAL_CSTRING("set-cookie"));
+    AddStaticElement(NS_LITERAL_CSTRING("strict-transport-security"));
+    AddStaticElement(NS_LITERAL_CSTRING("transfer-encoding"));
+    AddStaticElement(NS_LITERAL_CSTRING("user-agent"));
+    AddStaticElement(NS_LITERAL_CSTRING("vary"));
+    AddStaticElement(NS_LITERAL_CSTRING("via"));
+    AddStaticElement(NS_LITERAL_CSTRING("www-authenticate"));
+  }
+}
+
 nvFIFO::nvFIFO()
   : mByteCount(0)
   , mTable(nullptr, 128)
 {
+  InitializeStaticHeaders();
 }
 
 nvFIFO::~nvFIFO()
@@ -71,10 +155,13 @@ nvFIFO::Clear()
 const nvPair *
 nvFIFO::operator[] (int32_t index) const
 {
-  if (index >= mTable.GetSize()) {
+  if (index >= (mTable.GetSize() + kStaticHeaders.GetSize())) {
     MOZ_ASSERT(false);
     NS_WARNING("nvFIFO Table Out of Range");
     return nullptr;
+  }
+  if (index >= mTable.GetSize()) {
+    return static_cast<nvPair *>(kStaticHeaders.ObjectAt(index - mTable.GetSize()));
   }
   return static_cast<nvPair *>(mTable.ObjectAt(index));
 }
@@ -127,37 +214,6 @@ Http2BaseCompressor::UpdateReferenceSet(int32_t delta)
 
 Http2Decompressor::Http2Decompressor()
 {
-  // Section A.2.. the default response header table
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING(":status"), NS_LITERAL_CSTRING("200"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("age"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("cache-control"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("content-length"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("content-type"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("date"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("etag"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("expires"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("last-modified"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("server"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("set-cookie"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("vary"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("via"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("access-control-allow-origin"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("accept-ranges"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("allow"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("connection"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("content-disposition"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("content-encoding"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("content-language"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("content-location"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("content-range"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("link"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("location"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("proxy-authenticate"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("refresh"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("retry-after"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("strict-transport-security"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("transfer-encoding"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("www-authenticate"));
 }
 
 nsresult
@@ -492,36 +548,6 @@ Http2Decompressor::DoLiteralWithIncremental()
 Http2Compressor::Http2Compressor()
   : mParsedContentLength(-1)
 {
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING(":scheme"), NS_LITERAL_CSTRING("http"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING(":scheme"), NS_LITERAL_CSTRING("https"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING(":host"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING(":path"), NS_LITERAL_CSTRING("/"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING(":method"), NS_LITERAL_CSTRING("GET"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("accept"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("accept-charset"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("accept-encoding"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("accept-language"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("cookie"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("if-modified-since"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("user-agent"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("referer"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("authorization"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("allow"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("cache-control"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("connection"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("content-length"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("content-type"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("date"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("expect"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("from"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("if-match"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("if-none-match"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("if-range"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("if-unmodified-since"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("max-forwards"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("proxy-authorization"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("range"));
-  mHeaderTable.AddElement(NS_LITERAL_CSTRING("via"));
 }
 
 nsresult
