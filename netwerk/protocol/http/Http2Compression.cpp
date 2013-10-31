@@ -530,7 +530,11 @@ Http2Decompressor::CopyHuffmanStringFromInput(uint32_t bytes, nsACString &val)
   }
 
   if (bitsLeft) {
-    // TODO - ensure all bits remaining are ones (EOS encoding)
+    uint8_t mask = (1 << bitsLeft) - 1;
+    uint8_t bits = mData[mOffset - 1] & mask;
+    if (bits != mask) {
+      return NS_ERROR_ILLEGAL_VALUE;
+    }
   }
 
   val = buf;
