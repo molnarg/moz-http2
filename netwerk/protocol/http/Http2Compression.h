@@ -161,6 +161,7 @@ private:
   void EncodeInteger(uint32_t prefixLen, uint32_t val);
   void ProcessHeader(const nvPair inputPair);
   void MakeRoom(uint32_t amount);
+  void HuffAppend(const nsCString &value);
 
   int64_t mParsedContentLength;
 

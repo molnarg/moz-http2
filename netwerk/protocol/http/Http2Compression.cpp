@@ -9,6 +9,8 @@
 
 #include "nsDeque.h"
 #include "Http2Compression.h"
+#include "Http2HuffIncoming.h"
+#include "Http2HuffOutgoing.h"
 
 namespace mozilla {
 namespace net {
@@ -716,12 +718,10 @@ Http2Compressor::DoOutput(Http2Compressor::outputCode code,
     *startByte = (*startByte & 0x1f) | 0x60;
 
     if (!index) {
-      EncodeInteger(8, pair->mName.Length());
-      mOutput->Append(pair->mName);
+      HuffAppend(pair->mName);
     }
 
-    EncodeInteger(8, pair->mValue.Length());
-    mOutput->Append(pair->mValue);
+    HuffAppend(pair->mValue);
     break;
 
   case kIndexedLiteral:
@@ -733,12 +733,10 @@ Http2Compressor::DoOutput(Http2Compressor::outputCode code,
     *startByte = (*startByte & 0x1f) | 0x40;
 
     if (!index) {
-      EncodeInteger(8, pair->mName.Length());
-      mOutput->Append(pair->mName);
+      HuffAppend(pair->mName);
     }
 
-    EncodeInteger(8, pair->mValue.Length());
-    mOutput->Append(pair->mValue);
+    HuffAppend(pair->mValue);
     break;
 
   case kToggleOff:
@@ -866,6 +864,66 @@ Http2Compressor::MakeRoom(uint32_t amount)
 
   // adjust references to header table
   UpdateReferenceSet(removedCount);
+}
+
+void
+Http2Compressor::HuffAppend(const nsCString &value)
+{
+  nsACString buf;
+  uint8_t bitsLeft = 8;
+  uint32_t length = value.Length();
+  uint32_t offset;
+  uint8_t *startByte;
+
+  for (uint32_t i = 0; i < length; ++i) {
+    uint8_t idx = reinterpret_cast<uint8_t>(value[i]);
+    uint8_t huffLength = huff_outgoing[idx].length;
+    uint32_t huffValue = huff_outgoing[idx].value;
+
+    if (bitsLeft < 8) {
+      // Fill in the least significant <bitsLeft> bits of the previous byte
+      // first
+      uint32_t mask = ~((1 << (huffLength - bitsLeft)) - 1);
+      uint8_t val = ((huffValue & mask) >> (huffLength - bitsLeft)) & ((1 << bitsLeft) - 1);
+      offset = buf.Length();
+      startByte = reinterpret_cast<unsigned char *>(buf.BeginWriting()) + offset;
+      *startByte = *startByte | val;
+      huffLength -= bitsLeft;
+      bitsLeft = 8;
+    }
+
+    while (huffLength > 8) {
+      uint32_t mask = ~((1 << (huffLength - 8)) - 1);
+      uint8_t val = ((huffValue & mask) >> (huffLength - 8)) & 0xFF;
+      buf.Append(reinterpret_cast<char *>(&val), 1);
+      huffLength -= 8;
+    }
+
+    if (huffLength) {
+      // Fill in the most significant <huffLength> bits of the next byte
+      bitsLeft = 8 - huffLength;
+      uint8_t val = (huffValue & ((1 << huffLength) - 1)) << bitsLeft;
+      buf.Append(reinterpret_cast<char *>(&val), 1)
+    }
+  }
+
+  if (bitsLeft != 8) {
+    // Pad the last <bitsLeft> bits with ones, which corresponds to the EOS
+    // encoding
+    uint8_t val = (1 << bitsLeft) - 1;
+    offset = buf.Length();
+    startByte = reinterpret_cast<unsigned char *>(buf.BeginWriting()) + offset;
+    *startByte = *startByte | val;
+  }
+
+  // Now we know how long our encoded string is, we can fill in our length
+  offset = mOutput->Length();
+  EncodeInteger(7, buf.Length());
+  startByte = reinterpret_cast<unsigned char *>(mOutput->BeginWriting()) + offset;
+  *startByte = *startByte | 0x80;
+
+  // Finally, we can add our REAL data!
+  mOutput->Append(buf);
 }
 
 void
