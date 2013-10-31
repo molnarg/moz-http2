@@ -443,7 +443,7 @@ Http2Decompressor::CopyStringFromInput(uint32_t bytes, nsACString &val)
   return NS_OK;
 }
 
-nsresult
+void
 Http2Decompressor::DecodeHuffmanCharacter(huff_incoming_table *table,
                                           uint8_t &c, uint32_t &bytesConsumed,
                                           uint8_t &bitsLeft);
@@ -489,7 +489,8 @@ Http2Decompressor::DecodeHuffmanCharacter(huff_incoming_table *table,
   huff_entry *entry = table->entries[idx];
   if (entry->ptr) {
     // We're sorry, Mario, but your princess is in another castle
-    return DecodeHuffmanCharacter(entry->ptr, c, bytesConsumed, bitsLeft);
+    DecodeHuffmanCharacter(entry->ptr, c, bytesConsumed, bitsLeft);
+    return;
   }
 
   c = entry->value;
@@ -502,15 +503,14 @@ Http2Decompressor::DecodeHuffmanCharacter(huff_incoming_table *table,
     bytesConsumed--;
     bitsLeft -= 8;
   }
-
-  return NS_OK;
 }
 
 nsresult
 Http2Decompressor::CopyHuffmanStringFromInput(uint32_t bytes, nsACString &val)
 {
-  if (mOffset + bytes > mDataLen)
+  if (mOffset + bytes > mDataLen) {
     return NS_ERROR_ILLEGAL_VALUE;
+  }
 
   uint32_t bytesRead = 0;
   uint8_t bitsLeft = 0;
@@ -519,14 +519,14 @@ Http2Decompressor::CopyHuffmanStringFromInput(uint32_t bytes, nsACString &val)
   while (bytesRead < bytes) {
     uint32_t bytesConsumed = 0;
     uint8_t c;
-    nsresult rv = DecodeHuffmanCharacter(&huff_incoming_root, c, bytesConsumed,
-                                         bitsLeft);
-    if (NS_FAILED(rv)) {
-      return rv;
-    }
+    DecodeHuffmanCharacter(&huff_incoming_root, c, bytesConsumed, bitsLeft);
 
     bytesRead += bytesConsumed;
     buf.Append(c);
+  }
+
+  if (bytesRead > bytes) {
+    return NS_ERROR_ILLEGAL_VALUE;
   }
 
   if (bitsLeft) {

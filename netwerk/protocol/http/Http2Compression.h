@@ -116,7 +116,7 @@ private:
   nsresult CopyHeaderString(uint32_t index, nsACString &name);
   nsresult CopyStringFromInput(uint32_t index, nsACString &val);
   nsresult CopyHuffmanStringFromInput(uint32_t index, nsACString &val);
-  nsresult DecodeHuffmanCharacter(huff_incoming_table *table, uint8_t &c,
+  void     DecodeHuffmanCharacter(huff_incoming_table *table, uint8_t &c,
                                   uint32_t &bytesConsumed, uint8_t &bitsLeft);
 
   nsCString mHeaderStatus;
