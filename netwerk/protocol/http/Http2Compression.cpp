@@ -444,6 +444,100 @@ Http2Decompressor::CopyStringFromInput(uint32_t bytes, nsACString &val)
 }
 
 nsresult
+Http2Decompressor::DecodeHuffmanCharacter(huff_incoming_table *table,
+                                          uint8_t &c, uint32_t &bytesConsumed,
+                                          uint8_t &bitsLeft);
+{
+  uint8_t idxLen = table->prefixLen;
+  uint8_t idx;
+  uint8_t mask;
+
+  if (idxLen < bitsLeft) {
+    // Only need to consume part of the rest of the previous byte
+    mask = (1 << bitsLeft) - 1;
+    bitsLeft -= idxLen;
+    mask &= ~((1 << bitsLeft) - 1);
+    idx = (mData[mOffset - 1] & mask) >> bitsLeft;
+    idx &= ((1 << idxLen) - 1);
+  } else if (bitsLeft) {
+    // Need to consume all of the rest of the previous byte, and possibly some
+    // of the current byte
+    mask = (1 << bitsLeft) - 1;
+    idxLen -= bitsLeft;
+    idx = (mData[mOffset - 1] & mask) << idxLen;
+    bitsLeft = 0;
+    if (idxLen) {
+      // Need to consume some of the current byte
+      bitsLeft = 8 - idxLen;
+      mask = ~((1 << bitsLeft) - 1);
+      uint8_t lastBits = (mData[mOffset] & mask) >> bitsLeft;
+      idx |= (lastBits & ((1 << idxLen) - 1));
+      bytesConsumed++;
+      mOffset++;
+    }
+  } else {
+    // byte-aligned already
+    mask = (1 << 8) - 1;
+    bitsLeft = 8 - idxLen;
+    mask &= ~((1 << bitsLeft) - 1);
+    idx = (mData[mOffset - 1] & mask) >> bitsLeft;
+    idx &= ((1 << idxLen) - 1);
+    bytesConsumed++;
+    mOffset++;
+  }
+
+  huff_entry *entry = table->entries[idx];
+  if (entry->ptr) {
+    // We're sorry, Mario, but your princess is in another castle
+    return DecodeHuffmanCharacter(entry->ptr, c, bytesConsumed, bitsLeft);
+  }
+
+  c = entry->value;
+
+  // Need to adjust bitsLeft (and possibly other values) because we may not have
+  // consumed all of the bits that the table requires for indexing.
+  bitsLeft += (table->prefixLen - entry->prefixLen);
+  if (bitsLeft >= 8) {
+    mOffset--;
+    bytesConsumed--;
+    bitsLeft -= 8;
+  }
+
+  return NS_OK;
+}
+
+nsresult
+Http2Decompressor::CopyHuffmanStringFromInput(uint32_t bytes, nsACString &val)
+{
+  if (mOffset + bytes > mDataLen)
+    return NS_ERROR_ILLEGAL_VALUE;
+
+  uint32_t bytesRead = 0;
+  uint8_t bitsLeft = 0;
+  nsACString buf;
+
+  while (bytesRead < bytes) {
+    uint32_t bytesConsumed = 0;
+    uint8_t c;
+    nsresult rv = DecodeHuffmanCharacter(&huff_incoming_root, c, bytesConsumed,
+                                         bitsLeft);
+    if (NS_FAILED(rv)) {
+      return rv;
+    }
+
+    bytesRead += bytesConsumed;
+    buf.Append(c);
+  }
+
+  if (bitsLeft) {
+    // TODO - ensure all bits remaining are ones (EOS encoding)
+  }
+
+  val = buf;
+  return NS_OK;
+}
+
+nsresult
 Http2Decompressor::DoIndexed()
 {
   // this starts with a 1 bit pattern
@@ -487,12 +581,20 @@ Http2Decompressor::DoLiteralInternal(nsACString &name, nsACString &value)
   if (NS_FAILED(rv))
     return rv;
 
+  bool isHuffmanEncoded;
+
   if (!index) {
     // name is embedded as a literal
     uint32_t nameLen;
-    rv = DecodeInteger(8, nameLen);
-    if (NS_SUCCEEDED(rv))
-      rv = CopyStringFromInput(nameLen, name);
+    isHuffmanEncoded = mData[mOffset] & (1 << 7);
+    rv = DecodeInteger(7, nameLen);
+    if (NS_SUCCEEDED(rv)) {
+      if (isHuffmanEncoded) {
+        rv = CopyHuffmanStringFromInput(nameLen, name);
+      } else {
+        rv = CopyStringFromInput(nameLen, name);
+      }
+    }
   } else {
     // name is from headertable
     rv = CopyHeaderString(index - 1, name);
@@ -502,9 +604,15 @@ Http2Decompressor::DoLiteralInternal(nsACString &name, nsACString &value)
 
   // now the value
   uint32_t valueLen;
-  rv = DecodeInteger(8, valueLen);
-  if (NS_SUCCEEDED(rv))
-    rv = CopyStringFromInput(valueLen, value);
+  isHuffmanEncoded = mData[mOffset] & (1 << 7);
+  rv = DecodeInteger(7, valueLen);
+  if (NS_SUCCEEDED(rv)) {
+    if (isHuffmanEncoded) {
+      rv = CopyHuffmanStringFromInput(valueLen, value);
+    } else {
+      rv = CopyStringFromInput(valueLen, value);
+    }
+  }
   if (NS_FAILED(rv))
     return rv;
   return NS_OK;
