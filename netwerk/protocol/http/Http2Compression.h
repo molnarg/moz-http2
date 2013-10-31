@@ -145,6 +145,7 @@ public:
 protected:
   virtual void ClearHeaderTable() MOZ_OVERRIDE;
   virtual void UpdateReferenceSet(int32_t delta) MOZ_OVERRIDE;
+  virtual void IncrementReferenceSetIndices() MOZ_OVERRIDE;
 
 private:
   enum outputCode {
