@@ -59,7 +59,7 @@ public:
 
 protected:
   // this will become a HTTP/2 SETTINGS value in a future draft
-  const static uint32_t kMaxBuffer = 4096;
+  const static uint32_t kDefaultMaxBuffer = 4096;
 
   virtual void ClearHeaderTable();
   virtual void UpdateReferenceSet(int32_t delta);
@@ -84,6 +84,8 @@ protected:
 
   nsACString *mOutput;
   nvFIFO mHeaderTable;
+
+  uint32_t mMaxBuffer;
 };
 
 class Http2Decompressor MOZ_FINAL : public Http2BaseCompressor
@@ -148,6 +150,8 @@ public:
                              nsACString &output);
 
   int64_t GetParsedContentLength() { return mParsedContentLength; } // -1 on not found
+
+  void SetMaxBufferSize(uint32_t maxBufferSize);
 
 protected:
   virtual void ClearHeaderTable() MOZ_OVERRIDE;

@@ -1219,7 +1219,7 @@ Http2Session::RecvSettings(Http2Session *self)
     {
     case SETTINGS_TYPE_HEADER_TABLE_SIZE:
       LOG3(("Compression header table setting received: %d\n", value));
-      // TODO
+      self->mCompressor.SetMaxBufferSize(value);
       break;
 
     case SETTINGS_TYPE_ENABLE_PUSH:

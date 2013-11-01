@@ -176,6 +176,7 @@ nvFIFO::operator[] (int32_t index) const
 
 Http2BaseCompressor::Http2BaseCompressor()
   : mOutput(nullptr)
+  , mMaxBuffer(kDefaultMaxBuffer)
 {
 }
 
@@ -766,7 +767,7 @@ Http2Decompressor::DoLiteralWithIncremental()
     return rv;
 
   uint32_t room = nvPair(name, value).Size();
-  if (room > kMaxBuffer) { // 3.2.4
+  if (room > mMaxBuffer) { // 3.2.4
     ClearHeaderTable();
     LOG3(("HTTP decompressor literal with index not referenced due to size %u %s\n",
           room, name.get()));
@@ -775,7 +776,7 @@ Http2Decompressor::DoLiteralWithIncremental()
 
   // make room in the header table
   uint32_t removedCount = 0;
-  while (mHeaderTable.VariableLength() && ((mHeaderTable.ByteCount() + room) > kMaxBuffer)) { // 3.2.4
+  while (mHeaderTable.VariableLength() && ((mHeaderTable.ByteCount() + room) > mMaxBuffer)) { // 3.2.4
     uint32_t index = mHeaderTable.VariableLength() - 1;
     mHeaderTable.RemoveElement();
     ++removedCount;
@@ -1062,7 +1063,7 @@ Http2Compressor::MakeRoom(uint32_t amount)
 {
   // make room in the header table
   uint32_t removedCount = 0;
-  while (mHeaderTable.VariableLength() && ((mHeaderTable.ByteCount() + amount) > kMaxBuffer)) { // 3.2.4
+  while (mHeaderTable.VariableLength() && ((mHeaderTable.ByteCount() + amount) > mMaxBuffer)) { // 3.2.4
 
     // if there is a reference to removedCount (~0) in the implied reference set we need,
     // to toggle it off/on so that the implied reference is not lost when the
@@ -1181,7 +1182,7 @@ Http2Compressor::ProcessHeader(const nvPair inputPair)
 
   // We need to emit a new literal
   if (!match) {
-    if ((newSize > (kMaxBuffer / 2)) || (kMaxBuffer < 128)) {
+    if ((newSize > (mMaxBuffer / 2)) || (mMaxBuffer < 128)) {
       DoOutput(kPlainLiteral, &inputPair, nameReference);
       return;
     }
@@ -1218,6 +1219,20 @@ Http2Compressor::ProcessHeader(const nvPair inputPair)
   DoOutput(kToggleOn, &inputPair, matchedIndex);
   mAlternateReferenceSet.AppendElement(matchedIndex);
   return;
+}
+
+void
+Http2Compressor::SetMaxBufferSize(uint32_t maxBufferSize)
+{
+  uint32_t removedCount = 0;
+
+  while (mHeaderTable.VariableLength() && (mHeaderTable.ByteCount() > maxBufferSize)) {
+    mHeaderTable.RemoveElement();
+    ++removedCount;
+  }
+  UpdateReferenceSet(removedCount);
+
+  mMaxBuffer = maxBufferSize;
 }
 
 } // namespace mozilla::net
