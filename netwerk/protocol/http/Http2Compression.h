@@ -16,7 +16,7 @@
 namespace mozilla {
 namespace net {
 
-struct huff_incoming_table;
+struct HuffmanIncomingTable;
 
 class nvPair
 {
@@ -116,9 +116,9 @@ private:
   nsresult CopyHeaderString(uint32_t index, nsACString &name);
   nsresult CopyStringFromInput(uint32_t index, nsACString &val);
   nsresult CopyHuffmanStringFromInput(uint32_t index, nsACString &val);
-  nsresult DecodeHuffmanCharacter(huff_incoming_table *table, uint8_t &c,
+  nsresult DecodeHuffmanCharacter(HuffmanIncomingTable *table, uint8_t &c,
                                   uint32_t &bytesConsumed, uint8_t &bitsLeft);
-  nsresult DecodeFinalHuffmanCharacter(huff_incoming_table *table, uint8_t &c,
+  nsresult DecodeFinalHuffmanCharacter(HuffmanIncomingTable *table, uint8_t &c,
                                        uint8_t &bitsLeft);
 
   nsCString mHeaderStatus;
