@@ -530,6 +530,7 @@ Http2Decompressor::CopyHuffmanStringFromInput(uint32_t bytes, nsACString &val)
   }
 
   if (bitsLeft) {
+    // TODO - need to check for valid character in the final bits
     uint8_t mask = (1 << bitsLeft) - 1;
     uint8_t bits = mData[mOffset - 1] & mask;
     if (bits != mask) {
@@ -997,7 +998,7 @@ Http2Compressor::HuffAppend(const nsCString &value)
       // first
       uint32_t mask = ~((1 << (huffLength - bitsLeft)) - 1);
       uint8_t val = ((huffValue & mask) >> (huffLength - bitsLeft)) & ((1 << bitsLeft) - 1);
-      offset = buf.Length();
+      offset = buf.Length() - 1;
       startByte = reinterpret_cast<unsigned char *>(buf.BeginWriting()) + offset;
       *startByte = *startByte | val;
       huffLength -= bitsLeft;
@@ -1023,7 +1024,7 @@ Http2Compressor::HuffAppend(const nsCString &value)
     // Pad the last <bitsLeft> bits with ones, which corresponds to the EOS
     // encoding
     uint8_t val = (1 << bitsLeft) - 1;
-    offset = buf.Length();
+    offset = buf.Length() - 1;
     startByte = reinterpret_cast<unsigned char *>(buf.BeginWriting()) + offset;
     *startByte = *startByte | val;
   }
