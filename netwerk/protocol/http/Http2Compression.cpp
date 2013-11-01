@@ -443,7 +443,44 @@ Http2Decompressor::CopyStringFromInput(uint32_t bytes, nsACString &val)
   return NS_OK;
 }
 
-void
+nsresult
+Http2Decompressor::DecodeFinalHuffmanCharacter(huff_incoming_table *table,
+                                               uint8_t &c, uint8_t &bitsLeft)
+{
+  uint8_t idxLen = table->prefix_len;
+  LOG3(("DecodeFinalHuffmanCharacter bitsLeft %d idxLen", bitsLeft, idxLen));
+  uint8_t mask = (1 << bitsLeft) - 1;
+  uint8_t idx = mData[mOffset - 1] & mask;
+  if (idxLen < bitsLeft) {
+    mask &= ~((1 << (bitsLeft - idxLen)) - 1);
+    idx &= mask;
+    idx >>= (bitsLeft - idxLen);
+    idx &= ((1 << idxLen) - 1);
+  } else {
+    idx <<= (idxLen - bitsLeft);
+  }
+  LOG3(("DecodeFinalHuffmanCharacter calculated index %d", idx));
+
+  if (table->entries[idx].ptr) {
+    LOG3(("DecodeFinalHuffmanCharacter can't chain"));
+    return NS_ERROR_ILLEGAL_VALUE;
+  }
+
+  if (bitsLeft < table->entries[idx].prefix_len) {
+    LOG3(("DecodeFinalHuffmanCharacter not enough bits for valid comparison"));
+    return NS_ERROR_ILLEGAL_VALUE;
+  }
+
+  // This is a character!
+  c = table->entries[idx].value;
+  bitsLeft -= table->entries[idx].prefix_len;
+  LOG3(("DecodeFinalHuffmanCharacter read trailing character %d with %d "
+        "bits left", c, bitsLeft));
+
+  return NS_OK;
+}
+
+nsresult
 Http2Decompressor::DecodeHuffmanCharacter(huff_incoming_table *table,
                                           uint8_t &c, uint32_t &bytesConsumed,
                                           uint8_t &bitsLeft);
@@ -452,8 +489,10 @@ Http2Decompressor::DecodeHuffmanCharacter(huff_incoming_table *table,
   uint8_t idx;
   uint8_t mask;
 
+  LOG3(("DecodeHuffmanCharacter using prefix length %d", idxLen);
   if (idxLen < bitsLeft) {
     // Only need to consume part of the rest of the previous byte
+    LOG3(("DecodeHuffmanCharacter consuming %d of %d bits", idxLen, bitsLeft));
     mask = (1 << bitsLeft) - 1;
     bitsLeft -= idxLen;
     mask &= ~((1 << bitsLeft) - 1);
@@ -462,12 +501,16 @@ Http2Decompressor::DecodeHuffmanCharacter(huff_incoming_table *table,
   } else if (bitsLeft) {
     // Need to consume all of the rest of the previous byte, and possibly some
     // of the current byte
+    LOG3(("DecodeHuffmanCharacter getting %d of %d bits from previous byte",
+          bitsLeft, idxLen));
     mask = (1 << bitsLeft) - 1;
     idxLen -= bitsLeft;
     idx = (mData[mOffset - 1] & mask) << idxLen;
     bitsLeft = 0;
     if (idxLen) {
       // Need to consume some of the current byte
+      LOG3(("DecodeHuffmanCharacter consuming first %d bits from current byte",
+            idxLen));
       bitsLeft = 8 - idxLen;
       mask = ~((1 << bitsLeft) - 1);
       uint8_t lastBits = (mData[mOffset] & mask) >> bitsLeft;
@@ -477,6 +520,8 @@ Http2Decompressor::DecodeHuffmanCharacter(huff_incoming_table *table,
     }
   } else {
     // byte-aligned already
+    LOG3(("DecodeHuffmanCharacter consuming first %d bits of current byte",
+          idxLen));
     mask = (1 << 8) - 1;
     bitsLeft = 8 - idxLen;
     mask &= ~((1 << bitsLeft) - 1);
@@ -485,14 +530,29 @@ Http2Decompressor::DecodeHuffmanCharacter(huff_incoming_table *table,
     bytesConsumed++;
     mOffset++;
   }
+  LOG3(("DecodeHuffmanCharacter idx %d bitsLeft %d bytesConsumed %d mOffset %d",
+        idx, bitsLeft, bytesConsumed, mOffset));
 
   if (table->entries[idx].ptr) {
+    LOG3(("DecodeHuffmanCharacter found recursive lookup"));
+    if (bytesConsumed >= mDataLen) {
+      if (!bitsLeft) {
+        // No info left in input to try to consume, we're done
+        LOG3(("DecodeHuffmanCharacter no data to recurse with"));
+        return NS_ERROR_ILLEGAL_VALUE;
+      }
+
+      // We might get lucky here!
+      return DecodeFinalHuffmanCharacter(table->entries[idx].ptr, c, bitsLeft);
+    }
+
     // We're sorry, Mario, but your princess is in another castle
-    DecodeHuffmanCharacter(table->entries[idx].ptr, c, bytesConsumed, bitsLeft);
-    return;
+    return DecodeHuffmanCharacter(table->entries[idx].ptr, c, bytesConsumed,
+                                  bitsLeft);
   }
 
   c = table->entries[idx].value;
+  LOG3(("DecodeHuffmanCharacter decoded %d", c));
 
   // Need to adjust bitsLeft (and possibly other values) because we may not have
   // consumed all of the bits that the table requires for indexing.
@@ -502,29 +562,48 @@ Http2Decompressor::DecodeHuffmanCharacter(huff_incoming_table *table,
     bytesConsumed--;
     bitsLeft -= 8;
   }
+  LOG3(("DecodeHuffmanCharacter adjusted bitsLeft %d bytesConsumed %d mOffset "
+        "%d", bitsLeft, bytesConsumed, mOffset));
+
+  return NS_OK;
 }
 
 nsresult
 Http2Decompressor::CopyHuffmanStringFromInput(uint32_t bytes, nsACString &val)
 {
   if (mOffset + bytes > mDataLen) {
+    LOG3(("CopyHuffmanStringFromInput length %d@%d would overrun buffer %d",
+          bytes, mOffset, mDataLen));
     return NS_ERROR_ILLEGAL_VALUE;
   }
 
   uint32_t bytesRead = 0;
   uint8_t bitsLeft = 0;
   nsACString buf;
+  nsresult rv;
+  uint8_t c;
 
   while (bytesRead < bytes) {
     uint32_t bytesConsumed = 0;
-    uint8_t c;
-    DecodeHuffmanCharacter(&huff_incoming_root, c, bytesConsumed, bitsLeft);
+    rv = DecodeHuffmanCharacter(&huff_incoming_root, c, bytesConsumed,
+                                bitsLeft);
+    if (NS_FAILED(rv)) {
+      LOG3(("CopyHuffmanStringFromInput overran buffer length %d successfully "
+            "read %d consumed %d unsuccessfully", bytes, bytesRead,
+            bytesConsumed));
+      return rv;
+    }
+
+    LOG3(("CopyHuffmanStringFromInput read character %d consumed %d bytes with "
+          "%d bits left", c, bytesConsumed, bitsLeft));
 
     bytesRead += bytesConsumed;
     buf.Append(c);
   }
 
   if (bytesRead > bytes) {
+    LOG3(("CopyHuffmanStringFromInput overran buffer %d read %d", bytes,
+          bytesRead));
     return NS_ERROR_ILLEGAL_VALUE;
   }
 
@@ -532,21 +611,21 @@ Http2Decompressor::CopyHuffmanStringFromInput(uint32_t bytes, nsACString &val)
     // The shortest valid code is 4 bits, so we know there can be at most one
     // character left that our loop didn't decode. Check to see if that's the
     // case, and if so, add it to our output.
-    uint8_t mask = (1 << bitsLeft) - 1;
-    uint8_t idx = (mData[mOffset - 1] & mask) << (8 - bitsLeft);
-    if (!huff_incoming_root.entries[idx].ptr) {
-      // This is a character!
-      buf.Append(huff_incoming_root.entries[idx].value);
-      bitsLeft -= huff_incoming_root.entries[idx].prefix_len;
+    LOG3(("CopyHuffmanStringFromInput trying to get one last character"));
+    rv = DecodeFinalHuffmanCharacter(&huff_incoming_root, c, bitsLeft);
+    if (NS_SUCCEEDED(rv)) {
+      buf.Append(c);
     }
   }
 
   if (bitsLeft) {
     // Any bits left at this point must belong to the EOS symbol, so make sure
     // they make sense (ie, are all ones)
+    LOG3(("CopyHuffmanStringFromInput verifying %d bits are EOS", bitsLeft));
     uint8_t mask = (1 << bitsLeft) - 1;
     uint8_t bits = mData[mOffset - 1] & mask;
     if (bits != mask) {
+      LOG3(("CopyHuffmanStringFromInput invalid EOS marker"));
       return NS_ERROR_ILLEGAL_VALUE;
     }
   }
