@@ -486,18 +486,17 @@ Http2Decompressor::DecodeHuffmanCharacter(huff_incoming_table *table,
     mOffset++;
   }
 
-  huff_entry *entry = table->entries[idx];
-  if (entry->ptr) {
+  if (table->entries[idx].ptr) {
     // We're sorry, Mario, but your princess is in another castle
-    DecodeHuffmanCharacter(entry->ptr, c, bytesConsumed, bitsLeft);
+    DecodeHuffmanCharacter(table->entries[idx].ptr, c, bytesConsumed, bitsLeft);
     return;
   }
 
-  c = entry->value;
+  c = table->entries[idx].value;
 
   // Need to adjust bitsLeft (and possibly other values) because we may not have
   // consumed all of the bits that the table requires for indexing.
-  bitsLeft += (table->prefixLen - entry->prefixLen);
+  bitsLeft += (table->prefixLen - table->entries[idx].prefixLen);
   if (bitsLeft >= 8) {
     mOffset--;
     bytesConsumed--;
@@ -530,7 +529,21 @@ Http2Decompressor::CopyHuffmanStringFromInput(uint32_t bytes, nsACString &val)
   }
 
   if (bitsLeft) {
-    // TODO - need to check for valid character in the final bits
+    // The shortest valid code is 4 bits, so we know there can be at most one
+    // character left that our loop didn't decode. Check to see if that's the
+    // case, and if so, add it to our output.
+    uint8_t mask = (1 << bitsLeft) - 1;
+    uint8_t idx = (mData[mOffset - 1] & mask) << (8 - bitsLeft);
+    if (!huff_incoming_root.entries[idx].ptr) {
+      // This is a character!
+      buf.Append(huff_incoming_root.entries[idx].value);
+      bitsLeft -= huff_incoming_root.entries[idx].prefix_len;
+    }
+  }
+
+  if (bitsLeft) {
+    // Any bits left at this point must belong to the EOS symbol, so make sure
+    // they make sense (ie, are all ones)
     uint8_t mask = (1 << bitsLeft) - 1;
     uint8_t bits = mData[mOffset - 1] & mask;
     if (bits != mask) {
