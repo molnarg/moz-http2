@@ -472,7 +472,15 @@ Http2Decompressor::DecodeFinalHuffmanCharacter(huff_incoming_table *table,
   }
 
   // This is a character!
-  c = table->entries[idx].value;
+  if (table->entries[idx].value == 256) {
+    LOG3(("DecodeFinalHuffmanCharacter found full EOS string(?!)"));
+    if (bitsLeft) {
+      LOG3(("DecodeFinalHuffmanCharacter can't have bits left after EOS"));
+      return NS_ERROR_ILLEGAL_VALUE;
+    }
+    return NS_OK;
+  }
+  c = static_cast<uint8_t>(table->entries[idx].value & 0xFF);
   bitsLeft -= table->entries[idx].prefix_len;
   LOG3(("DecodeFinalHuffmanCharacter read trailing character %d with %d "
         "bits left", c, bitsLeft));
@@ -483,13 +491,13 @@ Http2Decompressor::DecodeFinalHuffmanCharacter(huff_incoming_table *table,
 nsresult
 Http2Decompressor::DecodeHuffmanCharacter(huff_incoming_table *table,
                                           uint8_t &c, uint32_t &bytesConsumed,
-                                          uint8_t &bitsLeft);
+                                          uint8_t &bitsLeft)
 {
-  uint8_t idxLen = table->prefixLen;
+  uint8_t idxLen = table->prefix_len;
   uint8_t idx;
   uint8_t mask;
 
-  LOG3(("DecodeHuffmanCharacter using prefix length %d", idxLen);
+  LOG3(("DecodeHuffmanCharacter using prefix length %d", idxLen));
   if (idxLen < bitsLeft) {
     // Only need to consume part of the rest of the previous byte
     LOG3(("DecodeHuffmanCharacter consuming %d of %d bits", idxLen, bitsLeft));
@@ -551,12 +559,20 @@ Http2Decompressor::DecodeHuffmanCharacter(huff_incoming_table *table,
                                   bitsLeft);
   }
 
-  c = table->entries[idx].value;
+  if (table->entries[idx].value == 256) {
+    LOG3(("DecodeHuffmanCharacter found full EOS string(?!)"));
+    if (mOffset != mDataLen || bitsLeft) {
+      LOG3(("DecodeHuffmanCharacter can't have any data left after EOS"));
+      return NS_ERROR_ILLEGAL_VALUE;
+    }
+    return NS_OK;
+  }
+  c = static_cast<uint8_t>(table->entries[idx].value & 0xFF);
   LOG3(("DecodeHuffmanCharacter decoded %d", c));
 
   // Need to adjust bitsLeft (and possibly other values) because we may not have
   // consumed all of the bits that the table requires for indexing.
-  bitsLeft += (table->prefixLen - table->entries[idx].prefixLen);
+  bitsLeft += (table->prefix_len - table->entries[idx].prefix_len);
   if (bitsLeft >= 8) {
     mOffset--;
     bytesConsumed--;
@@ -579,7 +595,7 @@ Http2Decompressor::CopyHuffmanStringFromInput(uint32_t bytes, nsACString &val)
 
   uint32_t bytesRead = 0;
   uint8_t bitsLeft = 0;
-  nsACString buf;
+  nsAutoCString buf;
   nsresult rv;
   uint8_t c;
 
@@ -1074,14 +1090,14 @@ Http2Compressor::MakeRoom(uint32_t amount)
 void
 Http2Compressor::HuffmanAppend(const nsCString &value)
 {
-  nsACString buf;
+  nsAutoCString buf;
   uint8_t bitsLeft = 8;
   uint32_t length = value.Length();
   uint32_t offset;
   uint8_t *startByte;
 
   for (uint32_t i = 0; i < length; ++i) {
-    uint8_t idx = reinterpret_cast<uint8_t>(value[i]);
+    uint8_t idx = static_cast<uint8_t>(value[i]);
     uint8_t huffLength = huff_outgoing[idx].length;
     uint32_t huffValue = huff_outgoing[idx].value;
 
@@ -1097,7 +1113,7 @@ Http2Compressor::HuffmanAppend(const nsCString &value)
       *startByte = *startByte | val;
       huffLength -= bitsLeft;
       bitsLeft = 8;
-      LOG3(("HuffmanAppend byte value %x", *startbyte));
+      LOG3(("HuffmanAppend byte value %x", *startByte));
     }
 
     while (huffLength > 8) {
@@ -1116,7 +1132,7 @@ Http2Compressor::HuffmanAppend(const nsCString &value)
             huffLength));
       bitsLeft = 8 - huffLength;
       uint8_t val = (huffValue & ((1 << huffLength) - 1)) << bitsLeft;
-      buf.Append(reinterpret_cast<char *>(&val), 1)
+      buf.Append(reinterpret_cast<char *>(&val), 1);
     }
   }
 
@@ -1138,7 +1154,6 @@ Http2Compressor::HuffmanAppend(const nsCString &value)
   EncodeInteger(7, bufLength);
   startByte = reinterpret_cast<unsigned char *>(mOutput->BeginWriting()) + offset;
   *startByte = *startByte | 0x80;
-  nsACString logBuf;
 
   // Finally, we can add our REAL data!
   mOutput->Append(buf);
