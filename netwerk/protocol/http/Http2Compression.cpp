@@ -183,9 +183,24 @@ Http2BaseCompressor::Http2BaseCompressor()
 void
 Http2BaseCompressor::ClearHeaderTable()
 {
+  uint32_t dynamicCount = mHeaderTable.VariableLength();
   mHeaderTable.Clear();
-  mReferenceSet.Clear();
-  mAlternateReferenceSet.Clear();
+
+  for (int32_t i = mReferenceSet.Length() - 1; i >= 0; --i) {
+    if (mReferenceSet[i] < dynamicCount) {
+      mReferenceSet.RemoveElementAt(i);
+    } else {
+      mReferenceSet[i] -= dynamicCount;
+    }
+  }
+
+  for (int32_t i = mAlternateReferenceSet.Length() - 1; i >= 0; --i) {
+    if (mAlternateReferenceSet[i] < dynamicCount) {
+      mAlternateReferenceSet.RemoveElementAt(i);
+    } else {
+      mAlternateReferenceSet[i] -= dynamicCount;
+    }
+  }
 }
 
 void
@@ -1013,8 +1028,17 @@ Http2Compressor::EncodeInteger(uint32_t prefixLen, uint32_t val)
 void
 Http2Compressor::ClearHeaderTable()
 {
+  uint32_t dynamicCount = mHeaderTable.VariableLength();
+
   Http2BaseCompressor::ClearHeaderTable();
-  mImpliedReferenceSet.Clear();
+
+  for (int32_t i = mImpliedReferenceSet.Length() - 1; i >= 0; --i) {
+    if (mImpliedReferenceSet[i] < dynamicCount) {
+      mImpliedReferenceSet.RemoveElementAt(i);
+    } else {
+      mImpliedReferenceSet[i] -= dynamicCount;
+    }
+  }
 }
 
 
