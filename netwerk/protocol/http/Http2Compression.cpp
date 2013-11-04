@@ -971,9 +971,9 @@ Http2Compressor::DoOutput(Http2Compressor::outputCode code,
     LOG3(("HTTP compressor %p noindex literal with name reference %u %s: %s\n",
           this, index, pair->mName.get(), pair->mValue.get()));
 
-    EncodeInteger(5, index); // 011 3 bit prefix
+    EncodeInteger(6, index); // 01 2 bit prefix
     startByte = reinterpret_cast<unsigned char *>(mOutput->BeginWriting()) + offset;
-    *startByte = (*startByte & 0x1f) | 0x60;
+    *startByte = (*startByte & 0x3f) | 0x40;
 
     if (!index) {
       HuffmanAppend(pair->mName);
@@ -986,9 +986,9 @@ Http2Compressor::DoOutput(Http2Compressor::outputCode code,
     LOG3(("HTTP compressor %p literal with name reference %u %s: %s\n",
           this, index, pair->mName.get(), pair->mValue.get()));
 
-    EncodeInteger(5, index); // 010 3 bit prefix
+    EncodeInteger(6, index); // 00 2 bit prefix
     startByte = reinterpret_cast<unsigned char *>(mOutput->BeginWriting()) + offset;
-    *startByte = (*startByte & 0x1f) | 0x40;
+    *startByte = *startByte & 0x3f;
 
     if (!index) {
       HuffmanAppend(pair->mName);
