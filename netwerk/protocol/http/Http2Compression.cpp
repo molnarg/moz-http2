@@ -1275,6 +1275,10 @@ Http2Compressor::ProcessHeader(const nvPair inputPair)
 
   // emit an index to add to reference set
   DoOutput(kToggleOn, &inputPair, matchedIndex);
+  if (matchedIndex >= mHeaderTable.VariableLength()) { // 3.2.1
+    MakeRoom(newSize);
+    mHeaderTable.AddElement(inputPair.mName, inputPair.mValue);
+  }
   mAlternateReferenceSet.AppendElement(matchedIndex);
   return;
 }
