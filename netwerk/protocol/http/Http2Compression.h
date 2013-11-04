@@ -64,6 +64,7 @@ protected:
   virtual void ClearHeaderTable();
   virtual void UpdateReferenceSet(int32_t delta);
   virtual void IncrementReferenceSetIndices();
+  virtual void MakeRoom(uint32_t amount) = 0;
 
   nsAutoTArray<uint32_t, 64> mReferenceSet; // list of indicies
 
@@ -104,6 +105,8 @@ public:
   void GetPath(nsACString &hdr) { hdr = mHeaderPath; }
   void GetMethod(nsACString &hdr) { hdr = mHeaderMethod; }
 
+protected:
+  virtual void MakeRoom(uint32_t amount) MOZ_OVERRIDE;
 
 private:
   nsresult DoIndexed();
@@ -157,6 +160,7 @@ protected:
   virtual void ClearHeaderTable() MOZ_OVERRIDE;
   virtual void UpdateReferenceSet(int32_t delta) MOZ_OVERRIDE;
   virtual void IncrementReferenceSetIndices() MOZ_OVERRIDE;
+  virtual void MakeRoom(uint32_t amount) MOZ_OVERRIDE;
 
 private:
   enum outputCode {
@@ -171,7 +175,6 @@ private:
                 const class nvPair *pair, uint32_t index);
   void EncodeInteger(uint32_t prefixLen, uint32_t val);
   void ProcessHeader(const nvPair inputPair);
-  void MakeRoom(uint32_t amount);
   void HuffmanAppend(const nsCString &value);
 
   int64_t mParsedContentLength;

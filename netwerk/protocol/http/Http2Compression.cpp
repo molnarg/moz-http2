@@ -666,6 +666,23 @@ Http2Decompressor::CopyHuffmanStringFromInput(uint32_t bytes, nsACString &val)
   return NS_OK;
 }
 
+void
+Http2Decompressor::MakeRoom(uint32_t amount)
+{
+  // make room in the header table
+  uint32_t removedCount = 0;
+  while (mHeaderTable.VariableLength() && ((mHeaderTable.ByteCount() + amount) > mMaxBuffer)) { // 3.2.4
+    uint32_t index = mHeaderTable.VariableLength() - 1;
+    mHeaderTable.RemoveElement();
+    ++removedCount;
+    LOG3(("HTTP decompressor header table index %u removed for size.\n",
+          index));
+  }
+
+  // adjust references to header table
+  UpdateReferenceSet(removedCount);
+}
+
 nsresult
 Http2Decompressor::DoIndexed()
 {
@@ -692,6 +709,21 @@ Http2Decompressor::DoIndexed()
   }
 
   rv = OutputHeader(index);
+  if (index >= mHeaderTable.VariableLength()) { // 3.2.1
+    const nvPair *pair = mHeaderTable[index];
+    uint32_t room = pair->Size();
+
+    if (room > mMaxBuffer) {
+      ClearHeaderTable();
+      LOG3(("HTTP decompressor index not referenced due to size %u %s\n",
+            room, pair->mName.get()));
+      return rv;
+    }
+
+    MakeRoom(room);
+    mHeaderTable.AddElement(pair->mName, pair->mValue);
+  }
+
   mReferenceSet.AppendElement(index);
   mAlternateReferenceSet.AppendElement(index);
   return rv;
@@ -789,18 +821,7 @@ Http2Decompressor::DoLiteralWithIncremental()
     return NS_OK;
   }
 
-  // make room in the header table
-  uint32_t removedCount = 0;
-  while (mHeaderTable.VariableLength() && ((mHeaderTable.ByteCount() + room) > mMaxBuffer)) { // 3.2.4
-    uint32_t index = mHeaderTable.VariableLength() - 1;
-    mHeaderTable.RemoveElement();
-    ++removedCount;
-    LOG3(("HTTP decompressor header table index %u %s removed for size.\n",
-          index, name.get()));
-  }
-
-  // adjust references to header table
-  UpdateReferenceSet(removedCount);
+  MakeRoom(room);
 
   // Incremental Indexing implicitly adds a row to the header table.
   // It also adds the new row to the Reference Set
