@@ -285,7 +285,7 @@ Http2Decompressor::DecodeHeaderBlock(const uint8_t *data, uint32_t datalen,
   while (NS_SUCCEEDED(rv) && (mOffset < datalen)) {
     if (mData[mOffset] & 0x80) {
       rv = DoIndexed();
-    } else if (!(mData[mOffset] & 0x40)) {
+    } else if (mData[mOffset] & 0x40) {
       rv = DoLiteralWithoutIndex();
     } else {
       rv = DoLiteralWithIncremental();
@@ -544,12 +544,11 @@ Http2Decompressor::DecodeHuffmanCharacter(HuffmanIncomingTable *table,
     }
   } else {
     // byte-aligned already
-    LOG3(("DecodeHuffmanCharacter consuming first %d bits of current byte",
-          idxLen));
+    LOG3(("DecodeHuffmanCharacter byte-aligned consuming %d bits", idxLen));
     mask = (1 << 8) - 1;
     bitsLeft = 8 - idxLen;
     mask &= ~((1 << bitsLeft) - 1);
-    idx = (mData[mOffset - 1] & mask) >> bitsLeft;
+    idx = (mData[mOffset] & mask) >> bitsLeft;
     idx &= ((1 << idxLen) - 1);
     bytesConsumed++;
     mOffset++;
@@ -733,12 +732,12 @@ nsresult
 Http2Decompressor::DoLiteralInternal(nsACString &name, nsACString &value)
 {
   // guts of doliteralwithoutindex and doliteralwithincremental
-  MOZ_ASSERT(((mData[mOffset] & 0xE0) == 0x60) ||  // withoutindex
-             ((mData[mOffset] & 0xE0) == 0x40));   // withincremental
+  MOZ_ASSERT(((mData[mOffset] & 0xC0) == 0x40) ||  // withoutindex
+             ((mData[mOffset] & 0xC0) == 0x00));   // withincremental
 
   // first let's get the name
   uint32_t index;
-  nsresult rv = DecodeInteger(5, index);
+  nsresult rv = DecodeInteger(6, index);
   if (NS_FAILED(rv))
     return rv;
 
@@ -782,8 +781,8 @@ Http2Decompressor::DoLiteralInternal(nsACString &name, nsACString &value)
 nsresult
 Http2Decompressor::DoLiteralWithoutIndex()
 {
-  // this starts with 011 bit pattern
-  MOZ_ASSERT((mData[mOffset] & 0xE0) == 0x60);
+  // this starts with 01 bit pattern
+  MOZ_ASSERT((mData[mOffset] & 0xC0) == 0x40);
 
   // This is not indexed so there is no adjustment to the
   // persistent reference set
@@ -803,8 +802,8 @@ Http2Decompressor::DoLiteralWithoutIndex()
 nsresult
 Http2Decompressor::DoLiteralWithIncremental()
 {
-  // this starts with 010 bit pattern
-  MOZ_ASSERT((mData[mOffset] & 0xE0) == 0x40);
+  // this starts with 00 bit pattern
+  MOZ_ASSERT((mData[mOffset] & 0xC0) == 0x00);
 
   nsAutoCString name, value;
   nsresult rv = DoLiteralInternal(name, value);
