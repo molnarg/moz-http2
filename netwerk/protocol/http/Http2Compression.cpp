@@ -1147,22 +1147,31 @@ Http2Compressor::HuffmanAppend(const nsCString &value)
     uint8_t huffLength = HuffmanOutgoing[idx].mLength;
     uint32_t huffValue = HuffmanOutgoing[idx].mValue;
 
+    LOG3(("HuffmanAppend appending character %c (%d) huffLength %d huffValue %d", value[i], idx, huffLength, huffValue));
+
     if (bitsLeft < 8) {
       // Fill in the least significant <bitsLeft> bits of the previous byte
       // first
       LOG3(("HuffmanAppend using %d bits of previous byte for %d bit encoding",
             bitsLeft, huffLength));
-      uint32_t mask = ~((1 << (huffLength - bitsLeft)) - 1);
-      uint8_t val = ((huffValue & mask) >> (huffLength - bitsLeft)) & ((1 << bitsLeft) - 1);
+      uint32_t val;
+      if (huffLength >= bitsLeft) {
+        val = huffValue & ~((1 << (huffLength - bitsLeft)) - 1);
+        val >>= (huffLength - bitsLeft);
+      } else {
+        val = huffValue << (bitsLeft - huffLength);
+      }
+      val &= ((1 << bitsLeft) - 1);
       offset = buf.Length() - 1;
       startByte = reinterpret_cast<unsigned char *>(buf.BeginWriting()) + offset;
-      *startByte = *startByte | val;
-      if (huffLength > bitsLeft) {
+      *startByte = *startByte | static_cast<uint8_t>(val & 0xFF);
+      if (huffLength >= bitsLeft) {
         huffLength -= bitsLeft;
+        bitsLeft = 8;
       } else {
+        bitsLeft -= huffLength;
         huffLength = 0;
       }
-      bitsLeft = 8;
       LOG3(("HuffmanAppend byte value %x", *startByte));
     }
 
