@@ -1112,7 +1112,11 @@ Http2Compressor::HuffmanAppend(const nsCString &value)
       offset = buf.Length() - 1;
       startByte = reinterpret_cast<unsigned char *>(buf.BeginWriting()) + offset;
       *startByte = *startByte | val;
-      huffLength -= bitsLeft;
+      if (huffLength > bitsLeft) {
+        huffLength -= bitsLeft;
+      } else {
+        huffLength = 0;
+      }
       bitsLeft = 8;
       LOG3(("HuffmanAppend byte value %x", *startByte));
     }
