@@ -357,7 +357,7 @@ Http2Decompressor::OutputHeader(const nsACString &name, const nsACString &value)
     LOG3(("HTTP Decompressor illegal respones header found : %s",
           toLog.get()));
     return NS_ERROR_ILLEGAL_VALUE;
-    }
+  }
 
   // Look for upper case characters in the name.
   for (const char *cPtr = name.BeginReading();
