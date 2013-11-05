@@ -1148,13 +1148,9 @@ Http2Compressor::HuffmanAppend(const nsCString &value)
     uint8_t huffLength = HuffmanOutgoing[idx].mLength;
     uint32_t huffValue = HuffmanOutgoing[idx].mValue;
 
-    LOG3(("HuffmanAppend appending character %c (%d) huffLength %d huffValue %d", value[i], idx, huffLength, huffValue));
-
     if (bitsLeft < 8) {
       // Fill in the least significant <bitsLeft> bits of the previous byte
       // first
-      LOG3(("HuffmanAppend using %d bits of previous byte for %d bit encoding",
-            bitsLeft, huffLength));
       uint32_t val;
       if (huffLength >= bitsLeft) {
         val = huffValue & ~((1 << (huffLength - bitsLeft)) - 1);
@@ -1173,23 +1169,17 @@ Http2Compressor::HuffmanAppend(const nsCString &value)
         bitsLeft -= huffLength;
         huffLength = 0;
       }
-      LOG3(("HuffmanAppend byte value %x", *startByte));
     }
 
     while (huffLength > 8) {
-      LOG3(("HuffmanAppend encoding 8 bits of %d left on a whole byte",
-            huffLength));
       uint32_t mask = ~((1 << (huffLength - 8)) - 1);
       uint8_t val = ((huffValue & mask) >> (huffLength - 8)) & 0xFF;
       buf.Append(reinterpret_cast<char *>(&val), 1);
       huffLength -= 8;
-      LOG3(("HuffmanAppend byte value %x", val));
     }
 
     if (huffLength) {
       // Fill in the most significant <huffLength> bits of the next byte
-      LOG3(("HuffmanAppend encoding final %d bits at the beginning of a byte",
-            huffLength));
       bitsLeft = 8 - huffLength;
       uint8_t val = (huffValue & ((1 << huffLength) - 1)) << bitsLeft;
       buf.Append(reinterpret_cast<char *>(&val), 1);
@@ -1199,17 +1189,14 @@ Http2Compressor::HuffmanAppend(const nsCString &value)
   if (bitsLeft != 8) {
     // Pad the last <bitsLeft> bits with ones, which corresponds to the EOS
     // encoding
-    LOG3(("HuffmanAppend adding %d ones to signal EOS", bitsLeft));
     uint8_t val = (1 << bitsLeft) - 1;
     offset = buf.Length() - 1;
     startByte = reinterpret_cast<unsigned char *>(buf.BeginWriting()) + offset;
     *startByte = *startByte | val;
-    LOG3(("HuffmanAppend byte value %x", *startByte));
   }
 
   // Now we know how long our encoded string is, we can fill in our length
   uint32_t bufLength = buf.Length();
-  LOG3(("HuffmanAppend final length %d", bufLength));
   offset = mOutput->Length();
   EncodeInteger(7, bufLength);
   startByte = reinterpret_cast<unsigned char *>(mOutput->BeginWriting()) + offset;
