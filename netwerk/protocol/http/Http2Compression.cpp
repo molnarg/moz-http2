@@ -1120,8 +1120,8 @@ Http2Compressor::MakeRoom(uint32_t amount)
             "removed for size but has an implied reference. Will Toggle.\n",
             index, mHeaderTable[index]->mName.get()));
 
-      DoOutput(kToggleOff, mHeaderTable[index], removedCount);
-      DoOutput(kToggleOn, mHeaderTable[index], removedCount);
+      DoOutput(kToggleOff, mHeaderTable[index], index);
+      DoOutput(kToggleOn, mHeaderTable[index], index);
     }
 
     LOG3(("HTTP compressor header table index %u %s removed for size.\n",
