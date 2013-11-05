@@ -461,7 +461,8 @@ Http2Decompressor::CopyStringFromInput(uint32_t bytes, nsACString &val)
 
 nsresult
 Http2Decompressor::DecodeFinalHuffmanCharacter(HuffmanIncomingTable *table,
-                                               uint8_t &c, uint8_t &bitsLeft)
+                                               uint8_t &c, uint8_t &bitsLeft,
+                                               bool &foundEOS)
 {
   uint8_t idxLen = table->mPrefixLen;
   uint8_t mask = (1 << bitsLeft) - 1;
@@ -488,6 +489,8 @@ Http2Decompressor::DecodeFinalHuffmanCharacter(HuffmanIncomingTable *table,
 
   // This is a character!
   if (table->mEntries[idx].mValue == 256) {
+    // EOS
+    foundEOS = true;
     if (bitsLeft > table->mEntries[idx].mPrefixLen) {
       // We can't have any bits left in our encoded string after decoding EOS.
       // Boo!
@@ -504,7 +507,7 @@ Http2Decompressor::DecodeFinalHuffmanCharacter(HuffmanIncomingTable *table,
 nsresult
 Http2Decompressor::DecodeHuffmanCharacter(HuffmanIncomingTable *table,
                                           uint8_t &c, uint32_t &bytesConsumed,
-                                          uint8_t &bitsLeft)
+                                          uint8_t &bitsLeft, bool &foundEOS)
 {
   uint8_t idxLen = table->mPrefixLen;
   uint8_t idx;
@@ -552,15 +555,17 @@ Http2Decompressor::DecodeHuffmanCharacter(HuffmanIncomingTable *table,
       }
 
       // We might get lucky here!
-      return DecodeFinalHuffmanCharacter(table->mEntries[idx].mPtr, c, bitsLeft);
+      return DecodeFinalHuffmanCharacter(table->mEntries[idx].mPtr, c, bitsLeft,
+                                         foundEOS);
     }
 
     // We're sorry, Mario, but your princess is in another castle
     return DecodeHuffmanCharacter(table->mEntries[idx].mPtr, c, bytesConsumed,
-                                  bitsLeft);
+                                  bitsLeft, foundEOS);
   }
 
   if (table->mEntries[idx].mValue == 256) {
+    foundEOS = true;
     if ((mOffset != mDataLen) || bitsLeft) {
       // There is ostensibly still data left, but we hit the EOS encoding. Boo!
       return NS_ERROR_ILLEGAL_VALUE;
@@ -593,15 +598,19 @@ Http2Decompressor::CopyHuffmanStringFromInput(uint32_t bytes, nsACString &val)
   nsAutoCString buf;
   nsresult rv;
   uint8_t c;
+  bool foundEOS;
 
   while (bytesRead < bytes) {
     uint32_t bytesConsumed = 0;
+    foundEOS = false;
     rv = DecodeHuffmanCharacter(&HuffmanIncomingRoot, c, bytesConsumed,
-                                bitsLeft);
+                                bitsLeft, foundEOS);
     NS_ENSURE_SUCCESS(rv, rv);
 
     bytesRead += bytesConsumed;
-    buf.Append(c);
+    if (!foundEOS) {
+      buf.Append(c);
+    }
   }
 
   if (bytesRead > bytes) {
@@ -612,8 +621,10 @@ Http2Decompressor::CopyHuffmanStringFromInput(uint32_t bytes, nsACString &val)
     // The shortest valid code is 4 bits, so we know there can be at most one
     // character left that our loop didn't decode. Check to see if that's the
     // case, and if so, add it to our output.
-    rv = DecodeFinalHuffmanCharacter(&HuffmanIncomingRoot, c, bitsLeft);
-    if (NS_SUCCEEDED(rv)) {
+    foundEOS = false;
+    rv = DecodeFinalHuffmanCharacter(&HuffmanIncomingRoot, c, bitsLeft,
+                                     foundEOS);
+    if (NS_SUCCEEDED(rv) && !foundEOS) {
       buf.Append(c);
     }
   }

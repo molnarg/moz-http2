@@ -122,9 +122,10 @@ private:
   nsresult CopyStringFromInput(uint32_t index, nsACString &val);
   nsresult CopyHuffmanStringFromInput(uint32_t index, nsACString &val);
   nsresult DecodeHuffmanCharacter(HuffmanIncomingTable *table, uint8_t &c,
-                                  uint32_t &bytesConsumed, uint8_t &bitsLeft);
+                                  uint32_t &bytesConsumed, uint8_t &bitsLeft,
+                                  bool &foundEOS);
   nsresult DecodeFinalHuffmanCharacter(HuffmanIncomingTable *table, uint8_t &c,
-                                       uint8_t &bitsLeft);
+                                       uint8_t &bitsLeft, bool &foundEOS);
 
   nsCString mHeaderStatus;
   nsCString mHeaderHost;
