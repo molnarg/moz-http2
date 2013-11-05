@@ -721,6 +721,8 @@ Http2Decompressor::DoIndexed()
 
     MakeRoom(room);
     mHeaderTable.AddElement(pair->mName, pair->mValue);
+    IncrementReferenceSetIndices();
+    index = 0;
   }
 
   mReferenceSet.AppendElement(index);
@@ -1277,8 +1279,11 @@ Http2Compressor::ProcessHeader(const nvPair inputPair)
   if (matchedIndex >= mHeaderTable.VariableLength()) { // 3.2.1
     MakeRoom(newSize);
     mHeaderTable.AddElement(inputPair.mName, inputPair.mValue);
+    IncrementReferenceSetIndices();
+    mAlternateReferenceSet.AppendElement(0);
+  } else {
+    mAlternateReferenceSet.AppendElement(matchedIndex);
   }
-  mAlternateReferenceSet.AppendElement(matchedIndex);
   return;
 }
 
