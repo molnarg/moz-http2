@@ -475,6 +475,9 @@ Http2Decompressor::DecodeFinalHuffmanCharacter(HuffmanIncomingTable *table,
   } else {
     idx <<= (idxLen - bitsLeft);
   }
+  // Don't update bitsLeft yet, because we need to check that value against the
+  // number of bits used by our encoding later on. We'll update when we are sure
+  // how many bits we've actually used.
 
   if (table->mEntries[idx].mPtr) {
     // Can't chain to another table when we're all out of bits in the encoding
@@ -496,6 +499,7 @@ Http2Decompressor::DecodeFinalHuffmanCharacter(HuffmanIncomingTable *table,
       // Boo!
       return NS_ERROR_ILLEGAL_VALUE;
     }
+    bitsLeft = 0;
     return NS_OK;
   }
   c = static_cast<uint8_t>(table->mEntries[idx].mValue & 0xFF);
@@ -549,7 +553,7 @@ Http2Decompressor::DecodeHuffmanCharacter(HuffmanIncomingTable *table,
 
   if (table->mEntries[idx].mPtr) {
     if (bytesConsumed >= mDataLen) {
-      if (!bitsLeft) {
+      if (!bitsLeft || (bytesConsumed > mDataLen)) {
         // No info left in input to try to consume, we're done
         return NS_ERROR_ILLEGAL_VALUE;
       }
