@@ -135,14 +135,13 @@ var EventEmitter = require('events').EventEmitter;
 var PassThrough = require('stream').PassThrough;
 var Readable = require('stream').Readable;
 var Writable = require('stream').Writable;
-var Endpoint = require('./endpoint').Endpoint;
+var Endpoint = require('http2-protocol').Endpoint;
 var http = require('http');
 var https = require('https');
 
 exports.STATUS_CODES = http.STATUS_CODES;
 exports.IncomingMessage = IncomingMessage;
 exports.OutgoingMessage = OutgoingMessage;
-exports.Endpoint = Endpoint;
 
 var deprecatedHeaders = [
   'connection',
@@ -156,15 +155,10 @@ var deprecatedHeaders = [
 
 // The implemented version of the HTTP/2 specification is [draft 04][1].
 // [1]: http://tools.ietf.org/html/draft-ietf-httpbis-http2-04
-var implementedVersion = 'HTTP-draft-06/2.0';
+var implementedVersion = 'HTTP-draft-07/2.0';
 
 // When doing NPN/ALPN negotiation, HTTP/1.1 is used as fallback
 var supportedProtocols = [implementedVersion, 'http/1.1', 'http/1.0'];
-
-// Using ALPN or NPN depending on node.js support (preferring ALPN)
-var negotiationMethod = process.features.tls_alpn ? 'ALPN' : 'NPN';
-var protocolList = process.features.tls_alpn ? 'ALPNProtocols' : 'NPNProtocols';
-var negotiatedProtocol = process.features.tls_alpn ? 'alpnProtocol' : 'npnProtocol';
 
 // Logging
 // -------
@@ -183,11 +177,7 @@ var defaultLogger = {
 };
 
 // Bunyan serializers exported by submodules that are worth adding when creating a logger.
-exports.serializers = {};
-var modules = ['./framer', './compressor', './flow', './connection', './stream', './endpoint'];
-modules.forEach(function(module) {
-  util._extend(exports.serializers, require(module).serializers);
-});
+exports.serializers = require('http2-protocol').serializers;
 
 // IncomingMessage class
 // ---------------------
@@ -348,7 +338,7 @@ exports.ServerResponse = OutgoingResponse; // for API compatibility
 // ------------
 
 function Server(options) {
-  options = options || {};
+  options = util._extend({}, options);
 
   this._log = (options.log || defaultLogger).child({ component: 'http' });
   this._settings = options.settings;
@@ -358,14 +348,16 @@ function Server(options) {
 
   // HTTP2 over TLS (using NPN or ALPN)
   if ((options.key && options.cert) || options.pfx) {
-    this._log.info('Creating HTTP/2 server over TLS/' + negotiationMethod);
+    this._log.info('Creating HTTP/2 server over TLS');
     this._mode = 'tls';
-    options[protocolList] = supportedProtocols;
+    options.ALPNProtocols = supportedProtocols;
+    options.NPNProtocols = supportedProtocols;
     this._server = https.createServer(options);
     this._originalSocketListeners = this._server.listeners('secureConnection');
     this._server.removeAllListeners('secureConnection');
     this._server.on('secureConnection', function(socket) {
-      if (socket[negotiatedProtocol] === implementedVersion && socket.servername) {
+      var negotiatedProtocol = socket.alpnProtocol || socket.npnProtocol;
+      if ((negotiatedProtocol === implementedVersion) && socket.servername) {
         start(socket);
       } else {
         fallback(socket);
@@ -416,8 +408,10 @@ Server.prototype._start = function _start(socket) {
 };
 
 Server.prototype._fallback = function _fallback(socket) {
+  var negotiatedProtocol = socket.alpnProtocol || socket.npnProtocol;
+
   this._log.info({ client: socket.remoteAddress + ':' + socket.remotePort,
-                   protocol: socket[negotiatedProtocol],
+                   protocol: negotiatedProtocol,
                    SNI: socket.servername
                  }, 'Falling back to simple HTTPS');
 
@@ -512,7 +506,7 @@ IncomingRequest.prototype = Object.create(IncomingMessage.prototype, { construct
 IncomingRequest.prototype._onHeaders = function _onHeaders(headers) {
   // * The ":method" header field includes the HTTP method
   // * The ":scheme" header field includes the scheme portion of the target URI
-  // * The ":host" header field includes the authority portion of the target URI
+  // * The ":authority" header field includes the authority portion of the target URI
   // * The ":path" header field includes the path and query parts of the target URI.
   //   This field MUST NOT be empty; URIs that do not contain a path component MUST include a value
   //   of '/', unless the request is an OPTIONS request for '*', in which case the ":path" header
@@ -520,10 +514,10 @@ IncomingRequest.prototype._onHeaders = function _onHeaders(headers) {
   // * All HTTP/2.0 requests MUST include exactly one valid value for all of these header fields. A
   //   server MUST treat the absence of any of these header fields, presence of multiple values, or
   //   an invalid value as a stream error of type PROTOCOL_ERROR.
-  this.method = this._checkSpecialHeader(':method', headers[':method']);
-  this.scheme = this._checkSpecialHeader(':scheme', headers[':scheme']);
-  this.host   = this._checkSpecialHeader(':host'  , headers[':host']  );
-  this.url    = this._checkSpecialHeader(':path'  , headers[':path']  );
+  this.method = this._checkSpecialHeader(':method'   , headers[':method']);
+  this.scheme = this._checkSpecialHeader(':scheme'   , headers[':scheme']);
+  this.host   = this._checkSpecialHeader(':authority', headers[':authority']  );
+  this.url    = this._checkSpecialHeader(':path'     , headers[':path']  );
 
   // * Host header is included in the headers object for backwards compatibility.
   this.headers.host = this.host;
@@ -609,12 +603,13 @@ OutgoingResponse.prototype.push = function push(options) {
   var promise = util._extend({
     ':method': (options.method || 'GET').toUpperCase(),
     ':scheme': (options.protocol && options.protocol.slice(0, -1)) || this._requestHeaders[':scheme'],
-    ':host': options.hostname || options.host || this._requestHeaders[':host'],
+    ':authority': options.hostname || options.host || this._requestHeaders[':authority'],
     ':path': options.path
   }, options.headers);
 
-  this._log.info({ method: promise[':method'], scheme: promise[':scheme'], host: promise[':host'],
-                   path: promise[':path'], headers: options.headers }, 'Promising push stream');
+  this._log.info({ method: promise[':method'], scheme: promise[':scheme'],
+                   authority: promise[':authority'], path: promise[':path'],
+                   headers: options.headers }, 'Promising push stream');
 
   var pushStream = this.stream.promise(promise);
 
@@ -652,7 +647,7 @@ exports.get = function get(options, callback) {
 function Agent(options) {
   EventEmitter.call(this);
 
-  options = options || {};
+  options = util._extend({}, options);
 
   this._settings = options.settings;
   this._log = (options.log || defaultLogger).child({ component: 'http' });
@@ -663,7 +658,8 @@ function Agent(options) {
   //   channels even if we ask for a negotiated one. This agent will contain only negotiated
   //   channels.
   var agentOptions = {};
-  agentOptions[protocolList] = supportedProtocols;
+  agentOptions.ALPNProtocols = supportedProtocols;
+  agentOptions.NPNProtocols = supportedProtocols;
   this._httpsAgent = new https.Agent(agentOptions);
 
   this.sockets = this._httpsAgent.sockets;
@@ -674,6 +670,8 @@ Agent.prototype = Object.create(EventEmitter.prototype, { constructor: { value: 
 Agent.prototype.request = function request(options, callback) {
   if (typeof options === 'string') {
     options = url.parse(options);
+  } else {
+    options = util._extend({}, options);
   }
 
   options.method = (options.method || 'GET').toUpperCase();
@@ -720,13 +718,15 @@ Agent.prototype.request = function request(options, callback) {
   // * HTTP/2 over TLS negotiated using NPN or ALPN
   else {
     var started = false;
-    options[protocolList] = supportedProtocols;
+    options.ALPNProtocols = supportedProtocols;
+    options.NPNProtocols = supportedProtocols;
     options.servername = options.host; // Server Name Indication
     options.agent = this._httpsAgent;
     var httpsRequest = https.request(options);
 
     httpsRequest.on('socket', function(socket) {
-      if (socket[negotiatedProtocol] !== undefined) {
+      var negotiatedProtocol = socket.alpnProtocol || socket.npnProtocol;
+      if (negotiatedProtocol !== undefined) {
         negotiated();
       } else {
         socket.on('secureConnect', negotiated);
@@ -736,7 +736,8 @@ Agent.prototype.request = function request(options, callback) {
     var self = this;
     function negotiated() {
       var endpoint;
-      if (httpsRequest.socket[negotiatedProtocol] === implementedVersion) {
+      var negotiatedProtocol = httpsRequest.socket.alpnProtocol || httpsRequest.socket.npnProtocol;
+      if (negotiatedProtocol === implementedVersion) {
         httpsRequest.socket.emit('agentRemove');
         unbundleSocket(httpsRequest.socket);
         endpoint = new Endpoint(self._log, 'CLIENT', self._settings);
@@ -831,11 +832,12 @@ OutgoingRequest.prototype._start = function _start(stream, options) {
 
   headers[':scheme'] = options.protocol.slice(0, -1);
   headers[':method'] = options.method;
-  headers[':host'] = options.host;
+  headers[':authority'] = options.host;
   headers[':path'] = options.path;
 
-  this._log.info({ scheme: headers[':scheme'], method: headers[':method'], host: headers[':host'],
-                   path: headers[':path'], headers: (options.headers || {}) }, 'Sending request');
+  this._log.info({ scheme: headers[':scheme'], method: headers[':method'],
+                   authority: headers[':authority'], path: headers[':path'],
+                   headers: (options.headers || {}) }, 'Sending request');
   this.stream.headers(headers);
   this.headersSent = true;
 
