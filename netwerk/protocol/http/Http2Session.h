@@ -89,23 +89,27 @@ public:
     PROTOCOL_ERROR = 1,
     INTERNAL_ERROR = 2,
     FLOW_CONTROL_ERROR = 3,
-    UNUSED1_ERROR = 4,
+    SETTINGS_TIMEOUT_ERROR = 4,
     STREAM_CLOSED_ERROR = 5,
-    FRAME_TOO_LARGE_ERROR = 6,
+    FRAME_SIZE_ERROR = 6,
     REFUSED_STREAM_ERROR = 7,
     CANCEL_ERROR = 8,
-    COMPRESSION_ERROR = 9
+    COMPRESSION_ERROR = 9,
+    CONNECT_ERROR = 10,
+    ENHANCE_YOUR_CALM = 420
   };
 
   // These are frame flags. If they, or other undefined flags, are
   // used on frames other than the comments indicate they MUST be ignored.
-  const static uint8_t kFlag_END_STREAM = 0x01; // data, headers, continuation
+  const static uint8_t kFlag_END_STREAM = 0x01; // data, headers
   const static uint8_t kFlag_END_HEADERS = 0x04; // headers, continuation
   const static uint8_t kFlag_PRIORITY = 0x08; //headers
   const static uint8_t kFlag_END_PUSH_PROMISE = 0x04; // push promise
-  const static uint8_t kFlag_PONG = 0x01; // ping
+  const static uint8_t kFlag_ACK = 0x01; // ping and settings
 
   enum {
+    SETTINGS_TYPE_HEADER_TABLE_SIZE = 1, // compression table size
+    SETTINGS_TYPE_ENABLE_PUSH = 2,     // can be used to disable push
     SETTINGS_TYPE_MAX_CONCURRENT = 4,  // streams recvr allowed to initiate
     SETTINGS_TYPE_INITIAL_WINDOW = 7,  // bytes for flow control default
     SETTINGS_TYPE_FLOW_CONTROL = 10    // flow control details
@@ -154,6 +158,7 @@ public:
   template<typename T>
   static void EnsureBuffer(nsAutoArrayPtr<T> &,
                            uint32_t, uint32_t, uint32_t &);
+  char       *EnsureOutputBuffer(uint32_t needed);
 
   template<typename charType>
   void CreateFrameHeader(charType dest, uint16_t frameLength,
@@ -214,6 +219,7 @@ private:
   nsresult    UncompressAndDiscard();
   void        MaybeDecrementConcurrent(Http2Stream *);
   void        GeneratePing(bool);
+  void        GenerateSettingsAck();
   void        GeneratePriority(uint32_t, uint32_t);
   void        GenerateRstStream(uint32_t, uint32_t);
   void        GenerateGoAway(uint32_t);

@@ -69,7 +69,7 @@ Http2PushedStream::ReadSegments(nsAHttpSegmentReader *,
                                 uint32_t, uint32_t *count)
 {
   // The request headers for this has been processed, so we need to verify
-  // that :host, :scheme, and :path MUST be present. :method MUST NOT be
+  // that :authority, :scheme, and :path MUST be present. :method MUST NOT be
   // present
   CreatePushHashKey(mHeaderScheme, mHeaderHost,
                     mSession->Serial(), mHeaderPath,

@@ -7,7 +7,7 @@
 #define mozilla_net_Http2Compression_Internal_h
 
 // HPACK
-// tools.ietf.org/html/draft-ietf-httpbis-header-compression-02 
+// tools.ietf.org/html/draft-ietf-httpbis-header-compression-02
 
 #include "mozilla/Attributes.h"
 #include "nsDeque.h"
@@ -15,6 +15,8 @@
 
 namespace mozilla {
 namespace net {
+
+struct HuffmanIncomingTable;
 
 class nvPair
 {
@@ -38,13 +40,12 @@ public:
   void AddElement(const nsCString &name, const nsCString &value);
   void AddElement(const nsCString &name);
   void RemoveElement();
-  void AddElement0(const nsCString &name, const nsCString &value);
-  void ChangeElement(int index, const nsCString &name, const nsCString &value);
   uint32_t ByteCount() const;
   uint32_t Length() const;
+  uint32_t VariableLength() const;
   void Clear();
   const nvPair *operator[] (int32_t index) const;
-  
+
 private:
   uint32_t mByteCount;
   nsDeque  mTable;
@@ -55,14 +56,16 @@ class Http2BaseCompressor
 public:
   Http2BaseCompressor();
   virtual ~Http2BaseCompressor() { };
-  
+
 protected:
   // this will become a HTTP/2 SETTINGS value in a future draft
-  const static uint32_t kMaxBuffer = 4096;
+  const static uint32_t kDefaultMaxBuffer = 4096;
 
   virtual void ClearHeaderTable();
   virtual void UpdateReferenceSet(int32_t delta);
- 
+  virtual void IncrementReferenceSetIndices();
+  virtual void MakeRoom(uint32_t amount) = 0;
+
   nsAutoTArray<uint32_t, 64> mReferenceSet; // list of indicies
 
   // the alternate set is used to track the emitted headers when
@@ -82,6 +85,8 @@ protected:
 
   nsACString *mOutput;
   nvFIFO mHeaderTable;
+
+  uint32_t mMaxBuffer;
 };
 
 class Http2Decompressor MOZ_FINAL : public Http2BaseCompressor
@@ -99,13 +104,14 @@ public:
   void GetScheme(nsACString &hdr) { hdr = mHeaderScheme; }
   void GetPath(nsACString &hdr) { hdr = mHeaderPath; }
   void GetMethod(nsACString &hdr) { hdr = mHeaderMethod; }
-  
+
+protected:
+  virtual void MakeRoom(uint32_t amount) MOZ_OVERRIDE;
 
 private:
   nsresult DoIndexed();
   nsresult DoLiteralWithoutIndex();
   nsresult DoLiteralWithIncremental();
-  nsresult DoLiteralWithSubstitution();
   nsresult DoLiteralInternal(nsACString &, nsACString &);
 
   nsresult DecodeInteger(uint32_t prefixLen, uint32_t &result);
@@ -114,6 +120,12 @@ private:
 
   nsresult CopyHeaderString(uint32_t index, nsACString &name);
   nsresult CopyStringFromInput(uint32_t index, nsACString &val);
+  nsresult CopyHuffmanStringFromInput(uint32_t index, nsACString &val);
+  nsresult DecodeHuffmanCharacter(HuffmanIncomingTable *table, uint8_t &c,
+                                  uint32_t &bytesConsumed, uint8_t &bitsLeft,
+                                  bool &foundEOS);
+  nsresult DecodeFinalHuffmanCharacter(HuffmanIncomingTable *table, uint8_t &c,
+                                       uint8_t &bitsLeft, bool &foundEOS);
 
   nsCString mHeaderStatus;
   nsCString mHeaderHost;
@@ -143,9 +155,13 @@ public:
 
   int64_t GetParsedContentLength() { return mParsedContentLength; } // -1 on not found
 
+  void SetMaxBufferSize(uint32_t maxBufferSize);
+
 protected:
   virtual void ClearHeaderTable() MOZ_OVERRIDE;
   virtual void UpdateReferenceSet(int32_t delta) MOZ_OVERRIDE;
+  virtual void IncrementReferenceSetIndices() MOZ_OVERRIDE;
+  virtual void MakeRoom(uint32_t amount) MOZ_OVERRIDE;
 
 private:
   enum outputCode {
@@ -160,7 +176,7 @@ private:
                 const class nvPair *pair, uint32_t index);
   void EncodeInteger(uint32_t prefixLen, uint32_t val);
   void ProcessHeader(const nvPair inputPair);
-  void MakeRoom(uint32_t amount);
+  void HuffmanAppend(const nsCString &value);
 
   int64_t mParsedContentLength;
 
@@ -171,4 +187,3 @@ private:
 } // namespace mozilla
 
 #endif // mozilla_net_Http2Compression_Internal_h
-
