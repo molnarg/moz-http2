@@ -31,12 +31,15 @@ namespace net {
         // leave room for official versions. telem goes to 48
         // 24 was a internal spdy/3.1
         // 25 was spdy/4a2
-        HTTP2_VERSION_DRAFT07 = 26
+        HTTP2_VERSION_DRAFT08 = 26
     };
 } // namespace mozilla::net
 } // namespace mozilla
 
 typedef uint8_t nsHttpVersion;
+
+#define NS_HTTP2_DRAFT_VERSION HTTP2_VERSION_DRAFT08
+#define NS_HTTP2_DRAFT_TOKEN "HTTP-draft-08/2.0"
 
 //-----------------------------------------------------------------------------
 // http connection capabilities
