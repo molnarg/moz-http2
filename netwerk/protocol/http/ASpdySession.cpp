@@ -8,7 +8,7 @@
 #include "HttpLog.h"
 
 /*
-  Currently supported are HTTP-draft-07/2.0 spdy/3.1 and spdy/3
+  Currently supported are HTTP-draft-[see nshttp.h]/2.0 spdy/3.1 and spdy/3
 */
 
 #include "nsHttp.h"
@@ -38,7 +38,7 @@ ASpdySession::NewSpdySession(uint32_t version,
   // requests as a precondition
   MOZ_ASSERT(version == SPDY_VERSION_3 ||
              version == SPDY_VERSION_31 ||
-             version == HTTP2_VERSION_DRAFT07,
+             version == NS_HTTP2_DRAFT_VERSION,
              "Unsupported spdy version");
 
   // Don't do a runtime check of IsSpdyV?Enabled() here because pref value
@@ -54,7 +54,7 @@ ASpdySession::NewSpdySession(uint32_t version,
   if (version == SPDY_VERSION_31)
     return new SpdySession31(aTransaction, aTransport, aPriority);
 
-  if (version == HTTP2_VERSION_DRAFT07)
+  if (version == NS_HTTP2_DRAFT_VERSION)
     return new Http2Session(aTransaction, aTransport, aPriority);
 
   return nullptr;
@@ -68,8 +68,8 @@ SpdyInformation::SpdyInformation()
   Version[1] = SPDY_VERSION_31;
   VersionString[1] = NS_LITERAL_CSTRING("spdy/3.1");
 
-  Version[2] = HTTP2_VERSION_DRAFT07;
-  VersionString[2] = NS_LITERAL_CSTRING("HTTP-draft-07/2.0");
+  Version[2] = NS_HTTP2_DRAFT_VERSION;
+  VersionString[2] = NS_LITERAL_CSTRING(NS_HTTP2_DRAFT_TOKEN);
 }
 
 bool
