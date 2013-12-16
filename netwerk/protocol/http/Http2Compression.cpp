@@ -72,6 +72,7 @@ InitializeStaticHeaders()
     AddStaticElement(NS_LITERAL_CSTRING("expect"));
     AddStaticElement(NS_LITERAL_CSTRING("expires"));
     AddStaticElement(NS_LITERAL_CSTRING("from"));
+    AddStaticElement(NS_LITERAL_CSTRING("host"));
     AddStaticElement(NS_LITERAL_CSTRING("if-match"));
     AddStaticElement(NS_LITERAL_CSTRING("if-modified-since"));
     AddStaticElement(NS_LITERAL_CSTRING("if-none-match"));
